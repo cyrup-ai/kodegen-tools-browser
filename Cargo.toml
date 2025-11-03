@@ -70,7 +70,7 @@ uuid = { version = "1", features = ["v4", "serde"] }  # For generating unique se
 dashmap = "6"          # For concurrent session storage
 
 # LLM infrastructure (workspace package)
-kodegen_candle_agent = { path = "../tools-candle-agent" }
+kodegen_candle_agent = { version = "0.1" }
 cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
 
 # MCP client for calling existing tools (HOT PATH!)
@@ -84,9 +84,6 @@ urlencoding = { version = "2" }
 
 # YAML config parsing
 serde_yaml = "0.9"
-
-# Plugin system (required by pdk.rs:1)
-extism-pdk = { version = "1" }
 
 
 [features]
