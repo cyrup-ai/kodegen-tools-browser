@@ -1,0 +1,10 @@
+# MCP Browser Use Configuration
+
+# Browser Settings
+browser:
+  headless: true                    # If true, the browser runs in headless mode
+  disable_security: false           # If true, disables security features in the browser
+  window:
+    width: 1280                     # Browser window width
+    height: 720                     # Browser window height
+
