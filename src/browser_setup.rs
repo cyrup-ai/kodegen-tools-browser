@@ -202,6 +202,7 @@ pub async fn download_managed_browser() -> Result<PathBuf> {
 /// # Arguments
 /// * `headless` - Whether to run browser in headless mode
 /// * `chrome_data_dir` - Optional custom user data directory path. If None, uses process ID fallback.
+/// * `disable_security` - Whether to disable browser security features (WARNING: only for trusted content)
 ///
 /// # Profile Isolation
 /// When `chrome_data_dir` is provided, each browser instance uses a unique profile directory,
@@ -209,6 +210,7 @@ pub async fn download_managed_browser() -> Result<PathBuf> {
 pub async fn launch_browser(
     headless: bool,
     chrome_data_dir: Option<PathBuf>,
+    disable_security: bool,
 ) -> Result<(Browser, JoinHandle<()>)> {
     // First try to find the browser
     let chrome_path = match find_browser_executable().await {
@@ -240,7 +242,7 @@ pub async fn launch_browser(
         config_builder = config_builder.with_head();
     }
 
-    // Add stealth mode arguments
+    // Add stealth mode arguments (benign flags always added)
     config_builder = config_builder
         .arg(format!("--user-agent={}", CHROME_USER_AGENT))
         .arg("--disable-blink-features=AutomationControlled")
@@ -249,15 +251,10 @@ pub async fn launch_browser(
         .arg("--disable-print-preview")
         .arg("--disable-desktop-notifications")
         .arg("--disable-software-rasterizer")
-        .arg("--disable-web-security")
-        .arg("--disable-features=IsolateOrigins,site-per-process")
-        .arg("--disable-setuid-sandbox")
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
-        .arg("--no-sandbox")
-        .arg("--ignore-certificate-errors")
         .arg("--enable-features=NetworkService,NetworkServiceInProcess")
-        // Additional stealth arguments
+        // Additional stealth arguments (benign)
         .arg("--disable-extensions")
         .arg("--disable-popup-blocking")
         .arg("--disable-background-networking")
@@ -274,6 +271,28 @@ pub async fn launch_browser(
         .arg("--use-mock-keychain")
         .arg("--hide-scrollbars")
         .arg("--mute-audio");
+
+    // Conditionally add security-disabling flags
+    if disable_security {
+        info!("WARNING: Disabling browser security features (disable_security=true)");
+        config_builder = config_builder
+            .arg("--disable-web-security")
+            .arg("--disable-features=IsolateOrigins,site-per-process")
+            .arg("--ignore-certificate-errors");
+    }
+
+    // Always disable sandbox in containerized environments (Docker detection)
+    if should_disable_sandbox() {
+        info!("Detected containerized environment, disabling sandbox");
+        config_builder = config_builder
+            .arg("--no-sandbox")
+            .arg("--disable-setuid-sandbox");
+    } else if disable_security {
+        // Only disable sandbox if explicitly requested AND not in container
+        config_builder = config_builder
+            .arg("--no-sandbox")
+            .arg("--disable-setuid-sandbox");
+    }
 
     let browser_config = config_builder
         .build()
@@ -294,6 +313,14 @@ pub async fn launch_browser(
     });
 
     Ok((browser, handler_task))
+}
+
+/// Detect if running in containerized environment (Docker, etc.)
+/// In containers, sandbox must be disabled as setuid doesn't work
+fn should_disable_sandbox() -> bool {
+    std::path::Path::new("/.dockerenv").exists()
+        || std::env::var("container").is_ok()
+        || std::env::var("KUBERNETES_SERVICE_HOST").is_ok()
 }
 
 /// Apply stealth mode settings to evade bot detection

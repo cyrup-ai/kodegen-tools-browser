@@ -104,14 +104,18 @@ impl Drop for BrowserWrapper {
 pub async fn launch_browser() -> Result<(Browser, JoinHandle<()>, PathBuf)> {
     info!("Launching main browser instance");
 
+    // Load configuration
+    let config = crate::load_yaml_config().unwrap_or_default();
+
     // Create unique temp directory for main browser (prevents profile lock with web_search)
     let user_data_dir = std::env::temp_dir().join(format!("kodegen_browser_main_{}", std::process::id()));
 
     // Use shared browser launcher with profile isolation
     // Pattern from: packages/tools-citescrape/src/browser_setup.rs:209-296
     let (browser, handler) = crate::browser_setup::launch_browser(
-        true, // headless
-        Some(user_data_dir.clone())
+        config.browser.headless,
+        Some(user_data_dir.clone()),
+        config.browser.disable_security,
     ).await?;
 
     Ok((browser, handler, user_data_dir))
