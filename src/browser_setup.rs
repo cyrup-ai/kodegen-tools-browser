@@ -133,10 +133,19 @@ fn expand_windows_env_vars(path: &str) -> String {
 
     while let Some(ch) = chars.next() {
         if ch == '%' {
-            // Found start of potential environment variable
-            let var_name: String = chars.by_ref().take_while(|&c| c != '%').collect();
+            // Collect characters until next '%' or end of string
+            let mut var_name = String::new();
+            let mut found_closing = false;
 
-            if !var_name.is_empty() {
+            for c in chars.by_ref() {
+                if c == '%' {
+                    found_closing = true;
+                    break;
+                }
+                var_name.push(c);
+            }
+
+            if found_closing && !var_name.is_empty() {
                 // Try to expand the variable
                 if let Ok(value) = std::env::var(&var_name) {
                     result.push_str(&value);
@@ -146,9 +155,14 @@ fn expand_windows_env_vars(path: &str) -> String {
                     result.push_str(&var_name);
                     result.push('%');
                 }
-            } else {
-                // Empty %% sequence, keep single %
+            } else if found_closing && var_name.is_empty() {
+                // Empty %% sequence, treat as single %
                 result.push('%');
+            } else {
+                // No closing % found - treat as literal text
+                result.push('%');
+                result.push_str(&var_name);
+                // Don't add closing % since it wasn't in the input
             }
         } else {
             result.push(ch);
