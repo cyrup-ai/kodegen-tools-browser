@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 /// Maximum session age before automatic cleanup (5 minutes)
 const SESSION_TIMEOUT: Duration = Duration::from_secs(300);
@@ -114,6 +115,8 @@ impl ResearchSession {
 /// Global research session manager
 pub struct ResearchSessionManager {
     sessions: DashMap<String, Arc<tokio::sync::Mutex<ResearchSession>>>,
+    cleanup_token: CancellationToken,
+    cleanup_task: Arc<tokio::sync::Mutex<Option<JoinHandle<()>>>>,
 }
 
 impl ResearchSessionManager {
@@ -121,12 +124,13 @@ impl ResearchSessionManager {
     pub fn global() -> &'static Self {
         static INSTANCE: OnceLock<ResearchSessionManager> = OnceLock::new();
         INSTANCE.get_or_init(|| {
-            let manager = Self {
+            let token = CancellationToken::new();
+            let cleanup_handle = Self::spawn_cleanup_task(token.clone());
+            Self {
                 sessions: DashMap::new(),
-            };
-            // Spawn cleanup task
-            manager.spawn_cleanup_task();
-            manager
+                cleanup_token: token,
+                cleanup_task: Arc::new(tokio::sync::Mutex::new(Some(cleanup_handle))),
+            }
         })
     }
 
@@ -176,14 +180,21 @@ impl ResearchSessionManager {
     }
 
     /// Spawn background cleanup task
-    fn spawn_cleanup_task(&self) {
-        tokio::spawn(async {
+    fn spawn_cleanup_task(cancel_token: CancellationToken) -> JoinHandle<()> {
+        tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
             loop {
-                interval.tick().await;
-                Self::global().cleanup_old_sessions().await;
+                tokio::select! {
+                    _ = interval.tick() => {
+                        Self::global().cleanup_old_sessions().await;
+                    }
+                    _ = cancel_token.cancelled() => {
+                        log::info!("Cleanup task cancelled");
+                        break;
+                    }
+                }
             }
-        });
+        })
     }
 
     /// Remove sessions older than timeout
@@ -201,5 +212,41 @@ impl ResearchSessionManager {
         for session_id in to_remove {
             self.sessions.remove(&session_id);
         }
+    }
+
+    /// Shutdown cleanup task gracefully
+    pub async fn shutdown(&self) -> Result<()> {
+        self.cleanup_token.cancel();
+        
+        // Take the join handle and wait for task with timeout
+        let mut task_lock = self.cleanup_task.lock().await;
+        if let Some(handle) = task_lock.take() {
+            match tokio::time::timeout(Duration::from_secs(5), handle).await {
+                Ok(Ok(())) => {
+                    log::info!("Cleanup task stopped successfully");
+                }
+                Ok(Err(e)) => {
+                    log::warn!("Cleanup task panicked: {:?}", e);
+                }
+                Err(_) => {
+                    log::warn!("Cleanup task didn't stop within timeout");
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
+
+// ShutdownHook implementation for MCP server integration
+#[cfg(feature = "server")]
+use kodegen_server_http::ShutdownHook;
+
+#[cfg(feature = "server")]
+impl ShutdownHook for ResearchSessionManager {
+    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            ResearchSessionManager::shutdown(self).await
+        })
     }
 }

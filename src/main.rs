@@ -20,6 +20,17 @@ impl ShutdownHook for BrowserManagerWrapper {
     }
 }
 
+// Wrapper to impl ShutdownHook for ResearchSessionManager singleton
+struct ResearchSessionManagerWrapper;
+
+impl ShutdownHook for ResearchSessionManagerWrapper {
+    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            kodegen_tools_browser::research::ResearchSessionManager::global().shutdown().await
+        })
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     run_http_server("browser", |_config, _tracker| {
@@ -33,6 +44,9 @@ async fn main() -> Result<()> {
         // Initialize browser manager (global singleton)
         let browser_manager = kodegen_tools_browser::BrowserManager::global();
         managers.register(BrowserManagerWrapper(browser_manager.clone()));
+
+        // Register research session manager for graceful cleanup task shutdown
+        managers.register(ResearchSessionManagerWrapper);
 
         // Register all browser tools
         use kodegen_tools_browser::*;
