@@ -53,8 +53,6 @@ pub struct ResearchSession {
     pub progress: Vec<ResearchStep>,
     /// Incremental results as research progresses (matches search pattern)
     pub results: Arc<tokio::sync::RwLock<Vec<crate::utils::ResearchResult>>>,
-    /// Completion flag (set when research finishes)
-    pub is_complete: Arc<std::sync::atomic::AtomicBool>,
     /// Total results counter for progress tracking
     pub total_results: Arc<std::sync::atomic::AtomicUsize>,
     /// Error message (if failed)
@@ -73,7 +71,6 @@ impl ResearchSession {
             started_at: Instant::now(),
             progress: Vec::new(),
             results: Arc::new(tokio::sync::RwLock::new(Vec::new())),
-            is_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             total_results: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             error: None,
             task_handle: None,
@@ -103,12 +100,48 @@ impl ResearchSession {
         self.error = Some(error);
     }
 
-    /// Mark as cancelled
-    pub fn cancel(&mut self) {
+    /// Cancel the session and wait for task to stop
+    ///
+    /// Attempts graceful cancellation by aborting the task and waiting for it
+    /// to complete. If the task doesn't complete within 5 seconds, logs a warning
+    /// but continues anyway.
+    pub async fn cancel(&mut self) -> Result<()> {
         self.status = ResearchStatus::Cancelled;
+
         if let Some(handle) = self.task_handle.take() {
+            // Abort the task
             handle.abort();
+
+            // Wait for it to complete (with timeout) - same pattern as shutdown()
+            match tokio::time::timeout(Duration::from_secs(5), handle).await {
+                Ok(Ok(())) => {
+                    log::info!("Research task cancelled gracefully");
+                }
+                Ok(Err(e)) if e.is_cancelled() => {
+                    // Expected - task was aborted
+                    log::info!("Research task cancelled via abort");
+                }
+                Ok(Err(e)) => {
+                    log::warn!("Research task exited with error during cancel: {}", e);
+                }
+                Err(_) => {
+                    log::warn!("Research task did not complete within 5s of abort");
+                    // Continue anyway - task will be dropped
+                }
+            }
         }
+
+        Ok(())
+    }
+
+    /// Check if research has completed (success, failure, or cancellation)
+    pub fn is_complete(&self) -> bool {
+        matches!(
+            self.status,
+            ResearchStatus::Completed
+                | ResearchStatus::Failed
+                | ResearchStatus::Cancelled
+        )
     }
 }
 
@@ -156,7 +189,7 @@ impl ResearchSessionManager {
     pub async fn stop_session(&self, session_id: &str) -> Result<()> {
         let session_ref = self.get_session(session_id).await?;
         let mut session = session_ref.lock().await;
-        session.cancel();
+        session.cancel().await?;
         Ok(())
     }
 
@@ -164,17 +197,28 @@ impl ResearchSessionManager {
     pub async fn list_sessions(&self) -> Vec<serde_json::Value> {
         let mut sessions = Vec::new();
         for entry in self.sessions.iter() {
-            if let Ok(session) = entry.value().try_lock() {
-                sessions.push(serde_json::json!({
-                    "session_id": session.session_id,
-                    "query": session.query,
-                    "status": session.status,
-                    "started_at": session.started_at.elapsed().as_millis() as u64,
-                    "runtime_seconds": session.runtime_seconds(),
-                    "pages_visited": session.progress.last().map(|p| p.pages_visited).unwrap_or(0),
-                    "current_step": session.progress.last().map(|p| p.message.clone()).unwrap_or_default(),
-                }));
-            }
+            // Wait for lock with 100ms timeout
+            let session = match tokio::time::timeout(
+                Duration::from_millis(100),
+                entry.value().lock()
+            ).await {
+                Ok(guard) => guard,
+                Err(_) => {
+                    // Log skipped sessions for visibility
+                    log::warn!("Session {} timed out during list (still locked after 100ms), skipping", entry.key());
+                    continue;
+                }
+            };
+
+            sessions.push(serde_json::json!({
+                "session_id": session.session_id,
+                "query": session.query,
+                "status": session.status,
+                "started_at": session.started_at.elapsed().as_millis() as u64,
+                "runtime_seconds": session.runtime_seconds(),
+                "pages_visited": session.progress.last().map(|p| p.pages_visited).unwrap_or(0),
+                "current_step": session.progress.last().map(|p| p.message.clone()).unwrap_or_default(),
+            }));
         }
         sessions
     }
@@ -202,15 +246,34 @@ impl ResearchSessionManager {
         let mut to_remove = Vec::new();
 
         for entry in self.sessions.iter() {
-            if let Ok(session) = entry.value().try_lock()
-                && session.started_at.elapsed() > SESSION_TIMEOUT
-                    && session.status != ResearchStatus::Running {
-                    to_remove.push(session.session_id.clone());
+            // Wait for lock with 200ms timeout (cleanup not user-facing, can wait longer)
+            let session = match tokio::time::timeout(
+                Duration::from_millis(200),
+                entry.value().lock()
+            ).await {
+                Ok(guard) => guard,
+                Err(_) => {
+                    // Session busy, will try again in next cleanup cycle
+                    log::debug!("Session {} busy during cleanup, will retry in 60s", entry.key());
+                    continue;
                 }
+            };
+
+            // Check if session should be removed
+            if session.started_at.elapsed() > SESSION_TIMEOUT
+                && session.status != ResearchStatus::Running {
+                to_remove.push(session.session_id.clone());
+            }
         }
 
-        for session_id in to_remove {
-            self.sessions.remove(&session_id);
+        // Remove collected sessions
+        for session_id in &to_remove {
+            self.sessions.remove(session_id);
+            log::info!("Cleaned up expired session: {}", session_id);
+        }
+
+        if !to_remove.is_empty() {
+            log::info!("Cleanup cycle: removed {} session(s)", to_remove.len());
         }
     }
 

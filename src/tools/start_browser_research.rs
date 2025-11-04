@@ -103,7 +103,6 @@ impl Tool for StartBrowserResearchTool {
         let session = session_ref.lock().await;
         let results = Arc::clone(&session.results);
         let total_results = Arc::clone(&session.total_results);
-        let is_complete = Arc::clone(&session.is_complete);
         drop(session);
 
         // Spawn background research task
@@ -119,7 +118,7 @@ impl Tool for StartBrowserResearchTool {
             );
 
             // Run research (incremental streaming pattern)
-            match research.research(&query, options, results, total_results.clone(), is_complete).await {
+            match research.research(&query, options, results, total_results.clone()).await {
                 Ok(()) => {
                     // Research completed successfully
                     let mut session = session_ref_bg.lock().await;

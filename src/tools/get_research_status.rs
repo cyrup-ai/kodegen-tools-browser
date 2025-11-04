@@ -74,8 +74,8 @@ impl Tool for GetResearchStatusTool {
         let session = session_ref.lock().await;
 
         // Build response with all progress information
-        let is_complete = session.is_complete.load(std::sync::atomic::Ordering::Acquire);
         let results_so_far = session.total_results.load(std::sync::atomic::Ordering::Acquire);
+        let has_result = session.is_complete();
         
         Ok(json!({
             "session_id": session.session_id,
@@ -90,7 +90,7 @@ impl Tool for GetResearchStatusTool {
                 "message": step.message,
                 "pages_visited": step.pages_visited,
             })).collect::<Vec<_>>(),
-            "has_result": is_complete,
+            "has_result": has_result,
             "results_so_far": results_so_far,
             "has_error": session.error.is_some(),
         }))

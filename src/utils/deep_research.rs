@@ -107,7 +107,6 @@ impl DeepResearch {
         options: Option<ResearchOptions>,
         results: Arc<tokio::sync::RwLock<Vec<ResearchResult>>>,
         total_results: Arc<std::sync::atomic::AtomicUsize>,
-        is_complete: Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<(), UtilsError> {
         let options = options.unwrap_or_default();
 
@@ -177,8 +176,6 @@ impl DeepResearch {
             }
         }
 
-        // Set completion flag (matches search pattern)
-        is_complete.store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
 
