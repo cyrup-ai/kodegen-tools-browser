@@ -31,6 +31,35 @@ pub struct Config {
 
     #[serde(default = "default_search_engine")]
     pub search_engine: String,
+
+    #[serde(default)]
+    pub browser: BrowserConfig,
+}
+
+/// Browser security and launch configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserConfig {
+    /// Run browser in headless mode
+    #[serde(default = "default_headless")]
+    pub headless: bool,
+
+    /// Disable web security features (Same-Origin Policy, etc.)
+    /// WARNING: Only enable for trusted content
+    #[serde(default = "default_disable_security")]
+    pub disable_security: bool,
+
+    /// Window dimensions
+    #[serde(default)]
+    pub window: WindowConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowConfig {
+    #[serde(default = "default_window_width")]
+    pub width: u32,
+
+    #[serde(default = "default_window_height")]
+    pub height: u32,
 }
 
 fn default_temperature() -> f64 {
@@ -46,6 +75,22 @@ fn default_search_engine() -> String {
     "google".to_string()
 }
 
+fn default_headless() -> bool {
+    true
+}
+
+fn default_disable_security() -> bool {
+    false  // SECURE BY DEFAULT
+}
+
+fn default_window_width() -> u32 {
+    1280
+}
+
+fn default_window_height() -> u32 {
+    720
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -53,6 +98,26 @@ impl Default for Config {
             max_tokens: default_max_tokens(),
             max_steps: default_max_steps(),
             search_engine: default_search_engine(),
+            browser: BrowserConfig::default(),
+        }
+    }
+}
+
+impl Default for BrowserConfig {
+    fn default() -> Self {
+        Self {
+            headless: default_headless(),
+            disable_security: default_disable_security(),
+            window: WindowConfig::default(),
+        }
+    }
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self {
+            width: default_window_width(),
+            height: default_window_height(),
         }
     }
 }

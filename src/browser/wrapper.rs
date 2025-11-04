@@ -78,12 +78,14 @@ impl Drop for BrowserWrapper {
         // Handler will be awaited/cleaned up by tokio runtime
         // Browser::drop() will automatically kill the Chrome process
 
-        // Cleanup temp directory (fallback if shutdown() wasn't called)
+        // Warn if temp directory was not cleaned up via proper shutdown path
         if self.user_data_dir.is_some() {
             tracing::warn!(
-                "BrowserWrapper dropped without explicit cleanup - removing temp dir in Drop"
+                "BrowserWrapper dropped without explicit cleanup. \
+                Temp directory will be orphaned: {}. \
+                Call BrowserManager::shutdown() before dropping to ensure proper cleanup.",
+                self.user_data_dir.as_ref().unwrap().display()
             );
-            self.cleanup_temp_dir();
         }
     }
 }
@@ -102,14 +104,18 @@ impl Drop for BrowserWrapper {
 pub async fn launch_browser() -> Result<(Browser, JoinHandle<()>, PathBuf)> {
     info!("Launching main browser instance");
 
+    // Load configuration
+    let config = crate::load_yaml_config().unwrap_or_default();
+
     // Create unique temp directory for main browser (prevents profile lock with web_search)
     let user_data_dir = std::env::temp_dir().join(format!("kodegen_browser_main_{}", std::process::id()));
 
     // Use shared browser launcher with profile isolation
     // Pattern from: packages/tools-citescrape/src/browser_setup.rs:209-296
     let (browser, handler) = crate::browser_setup::launch_browser(
-        true, // headless
-        Some(user_data_dir.clone())
+        config.browser.headless,
+        Some(user_data_dir.clone()),
+        config.browser.disable_security,
     ).await?;
 
     Ok((browser, handler, user_data_dir))
