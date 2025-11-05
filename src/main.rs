@@ -37,17 +37,17 @@ async fn main() -> Result<()> {
         Box::pin(async move {
         let mut tool_router = ToolRouter::new();
         let mut prompt_router = PromptRouter::new();
-        let mut managers = Managers::new();
+        let managers = Managers::new();
 
         // Fixed server URL for browser loopback tools (port 30438 managed by daemon)
         let server_url = "http://127.0.0.1:30438/mcp".to_string();
 
         // Initialize browser manager (global singleton)
         let browser_manager = kodegen_tools_browser::BrowserManager::global();
-        managers.register(BrowserManagerWrapper(browser_manager.clone()));
+        managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
 
         // Register research session manager for graceful cleanup task shutdown
-        managers.register(ResearchSessionManagerWrapper);
+        managers.register(ResearchSessionManagerWrapper).await;
 
         // Register all browser tools
         use kodegen_tools_browser::*;
