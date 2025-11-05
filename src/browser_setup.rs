@@ -10,6 +10,51 @@ use tracing::{error, info, warn};
 
 use crate::utils::constants::CHROME_USER_AGENT;
 
+/// RAII guard for temporary directory cleanup
+///
+/// Automatically removes the directory on drop unless consumed by `into_path()`.
+/// This ensures cleanup happens on all error paths without manual intervention.
+///
+/// Pattern based on: src/browser/wrapper.rs:74-89 (BrowserWrapper::Drop)
+struct TempDirGuard {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl TempDirGuard {
+    /// Create directory and guard for automatic cleanup
+    fn new(path: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&path)
+            .context("Failed to create user data directory")?;
+        Ok(Self { 
+            path, 
+            keep: false 
+        })
+    }
+
+    /// Consume guard and return path, preventing automatic cleanup
+    ///
+    /// Call this on success to transfer ownership to BrowserWrapper
+    fn into_path(mut self) -> PathBuf {
+        self.keep = true;
+        self.path.clone()
+    }
+}
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        if !self.keep {
+            if let Err(e) = std::fs::remove_dir_all(&self.path) {
+                warn!("Failed to clean up temp dir {}: {}", 
+                    self.path.display(), e);
+            } else {
+                info!("Cleaned up temp dir after launch failure: {}", 
+                    self.path.display());
+            }
+        }
+    }
+}
+
 /// Find Chrome/Chromium executable on the system with platform-specific search paths.
 pub async fn find_browser_executable() -> Result<PathBuf> {
     // First check environment variable which overrides all other methods
@@ -222,11 +267,13 @@ pub async fn launch_browser(
     };
 
     // Use provided chrome_data_dir or fall back to process ID
-    let user_data_dir = chrome_data_dir.unwrap_or_else(|| {
+    let user_data_dir_path = chrome_data_dir.unwrap_or_else(|| {
         std::env::temp_dir().join(format!("enigo_chrome_{}", std::process::id()))
     });
 
-    std::fs::create_dir_all(&user_data_dir).context("Failed to create user data directory")?;
+    // Create directory with automatic cleanup on error
+    let temp_guard = TempDirGuard::new(user_data_dir_path)?;
+    let user_data_dir = temp_guard.path.clone();
 
     // Build browser config with the executable path
     let mut config_builder = BrowserConfigBuilder::default()
@@ -312,6 +359,9 @@ pub async fn launch_browser(
         info!("Browser handler task completed");
     });
 
+    // Success - prevent automatic cleanup (BrowserWrapper now owns the directory)
+    temp_guard.into_path();
+    
     Ok((browser, handler_task))
 }
 

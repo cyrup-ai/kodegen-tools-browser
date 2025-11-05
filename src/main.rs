@@ -34,6 +34,7 @@ impl ShutdownHook for ResearchSessionManagerWrapper {
 #[tokio::main]
 async fn main() -> Result<()> {
     run_http_server("browser", |_config, _tracker| {
+        Box::pin(async move {
         let mut tool_router = ToolRouter::new();
         let mut prompt_router = PromptRouter::new();
         let mut managers = Managers::new();
@@ -125,6 +126,7 @@ async fn main() -> Result<()> {
         );
 
         Ok(RouterSet::new(tool_router, prompt_router, managers))
+        })
     })
     .await
 }
