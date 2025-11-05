@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_browser"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -22,10 +22,14 @@ name = "kodegen_tools_browser"
 crate-type = ["lib"]
 
 [dependencies]
-# MCP tool dependencies
-kodegen_mcp_schema = { path = "../kodegen-mcp-schema" }
-kodegen_mcp_tool = { path = "../kodegen-mcp-tool" }
-kodegen_server_http = { path = "../kodegen-server-http" }
+
+kodegen_mcp_schema = { version = "0.1" }
+kodegen_mcp_tool = { version = "0.1" }
+kodegen_server_http = { version = "0.1" }
+kodegen_candle_agent = { version = "0.1" }
+kodegen_mcp_client = { version = "0.1"  }
+cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
+
 rmcp = { version = "0.8", features = ["client", "schemars", "server", "transport-sse-server"] }
 schemars = "1"
 
@@ -69,13 +73,6 @@ url = "2"            # For search URL manipulation
 html2md = "0.2"          # HTML to markdown/text conversion for SPAs
 uuid = { version = "1", features = ["v4", "serde"] }  # For generating unique session IDs
 dashmap = "6"          # For concurrent session storage
-
-# LLM infrastructure (workspace package)
-kodegen_candle_agent = { version = "0.1" }
-cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
-
-# MCP client for calling existing tools (HOT PATH!)
-kodegen_mcp_client = { version = "0.1"  }
 
 # Time/date (required by deep_research.rs, agent/mod.rs)
 chrono = { version = "0.4", features = ["serde"] }
