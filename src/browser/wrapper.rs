@@ -79,12 +79,12 @@ impl Drop for BrowserWrapper {
         // Browser::drop() will automatically kill the Chrome process
 
         // Warn if temp directory was not cleaned up via proper shutdown path
-        if self.user_data_dir.is_some() {
+        if let Some(ref dir) = self.user_data_dir {
             tracing::warn!(
                 "BrowserWrapper dropped without explicit cleanup. \
                 Temp directory will be orphaned: {}. \
                 Call BrowserManager::shutdown() before dropping to ensure proper cleanup.",
-                self.user_data_dir.as_ref().unwrap().display()
+                dir.display()
             );
         }
     }
