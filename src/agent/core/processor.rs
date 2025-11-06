@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::warn;
 use kodegen_mcp_client::KodegenClient;
 
 use crate::agent::{AgentError, AgentOutput, AgentResult, prompts::{AgentMessagePrompt, SystemPrompt}};

@@ -28,36 +28,6 @@ impl AgentInner {
     /// - browser_screenshot: Get base64-encoded screenshot (optional)
     ///
     /// Returns BrowserStateWithScreenshot with text summary and screenshot.
-use base64::Engine;
-use tokio::time::Duration;
-use tokio_stream::StreamExt;
-use tracing::{debug, warn};
-use kodegen_candle_agent::prelude::*;
-use cyrup_sugars::prelude::MessageChunk;
-
-use crate::agent::{AgentError, AgentResult, BrowserExtractTextResponse, BrowserScreenshotResponse};
-use super::processor::AgentInner;
-
-/// Struct to hold browser state, screenshot path, and visual description
-#[derive(Debug, Clone)]
-pub(super) struct BrowserStateWithScreenshot {
-    pub(super) state: String,
-    pub(super) screenshot_path: Option<String>,
-    pub(super) visual_description: Option<String>,
-}
-
-/// Browser state management implementation
-impl AgentInner {
-    /// Get current browser state for LLM context (HOT PATH!)
-    ///
-    /// Fetches page content and optional screenshot via MCP tools.
-    /// This provides the LLM with current browser context for action planning.
-    ///
-    /// Uses:
-    /// - browser_extract_text: Get page text content
-    /// - browser_screenshot: Get base64-encoded screenshot (optional)
-    ///
-    /// Returns BrowserStateWithScreenshot with text summary and screenshot.
     pub(super) async fn get_browser_state(&self) -> AgentResult<BrowserStateWithScreenshot> {
         // Extract page content via MCP (HOT PATH!)
         let content = match self
@@ -97,7 +67,6 @@ impl AgentInner {
             Ok(result) => {
                 // Parse base64 image from tool response
                 // ⚠️ CRITICAL: browser_screenshot returns {"image": base64}, NOT {"base64": base64}!
-                // See packages/tools-browser/src/tools/screenshot.rs:148-156
                 let screenshot_base64 =
                     result
                         .content
@@ -112,17 +81,16 @@ impl AgentInner {
                 // Save base64 to temp file for vision API
                 if let Some(base64_data) = screenshot_base64 {
                     // ✅ FIX 1: Move CPU-intensive base64 decode to blocking thread pool
-                    // This prevents the decode operation from blocking tokio worker threads
                     let decoded_bytes = tokio::task::spawn_blocking(move || {
                         base64::engine::general_purpose::STANDARD.decode(&base64_data)
                     })
-                    .await // Wait for blocking task to complete (doesn't block thread!)
+                    .await
                     .map_err(|e| {
                         AgentError::UnexpectedError(format!("Base64 decode task failed: {}", e))
-                    })? // Handle JoinError
+                    })?
                     .map_err(|e| {
                         AgentError::UnexpectedError(format!("Base64 decode failed: {}", e))
-                    })?; // Handle decode error
+                    })?;
 
                     // Create unique temp file path with nanosecond precision + PID
                     let temp_dir = std::env::temp_dir();
@@ -140,11 +108,7 @@ impl AgentInner {
                     );
                     let temp_path = temp_dir.join(filename);
 
-                    // Example output: browser_screenshot_1735077890_123456789_42.png
-                    //                 ^-seconds----^  ^-nanos----^  ^-PID-^
-
                     // ✅ FIX 2: Use async file write instead of blocking std::fs::write
-                    // This allows other async tasks to progress during I/O
                     match tokio::fs::write(&temp_path, decoded_bytes).await {
                         Ok(_) => Some(temp_path.to_string_lossy().to_string()),
                         Err(e) => {
@@ -181,7 +145,7 @@ impl AgentInner {
         Ok(BrowserStateWithScreenshot {
             state,
             screenshot_path,
-            visual_description: None, // Will be populated by format_browser_state_with_vision()
+            visual_description: None,
         })
     }
 
@@ -213,24 +177,19 @@ impl AgentInner {
                 // Wrap entire stream consumption in timeout
                 let vision_timeout = Duration::from_secs(self.vision_timeout_secs);
                 let result = tokio::time::timeout(vision_timeout, async {
-                    // Vision responses typically 200-1000 tokens (~4KB conservative estimate)
-                    // Pre-allocate to avoid reallocations during streaming
                     let mut description = String::with_capacity(4096);
                     let mut stream =
                         CandleFluentAi::vision().describe_image(screenshot_path, vision_query);
 
                     while let Some(chunk) = stream.next().await {
-                        // Check for errors
                         if let Some(error) = chunk.error() {
                             return Err(format!("Vision analysis error: {}", error));
                         }
 
-                        // Accumulate text
                         if !chunk.text.is_empty() {
                             description.push_str(&chunk.text);
                         }
 
-                        // Check for completion
                         if chunk.is_final {
                             if let Some(stats) = &chunk.stats {
                                 debug!(
@@ -241,24 +200,20 @@ impl AgentInner {
                             return Ok(description);
                         }
                     }
-                    // Stream ended without is_final
                     Err("Vision stream ended without final chunk".to_string())
                 })
                 .await;
 
                 match result {
                     Ok(Ok(desc)) => {
-                        // Success: cache the description for potential reuse
                         browser_state.visual_description = Some(desc.clone());
                         desc
                     }
                     Ok(Err(e)) => {
-                        // Stream error
                         warn!("Vision analysis failed: {}", e);
                         format!("[Vision analysis failed: {}]", e)
                     }
                     Err(_) => {
-                        // Timeout
                         warn!(
                             "Vision analysis timed out after {}s",
                             self.vision_timeout_secs
