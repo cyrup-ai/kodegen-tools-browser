@@ -169,165 +169,126 @@ impl kodegen_server_http::ShutdownHook for ResearchSessionManagerWrapper {
     }
 }
 
-/// Start the browser tools HTTP server programmatically.
+/// Start the browser tools HTTP server programmatically
 ///
-/// This function is designed to be called from kodegend for embedded server mode.
-/// It replicates the logic from main.rs but as a library function.
+/// Returns a ServerHandle for graceful shutdown control.
+/// This function is non-blocking - the server runs in background tasks.
 ///
 /// # Arguments
-/// * `addr` - The socket address to bind to
+/// * `addr` - Socket address to bind to
 /// * `tls_cert` - Optional path to TLS certificate file
 /// * `tls_key` - Optional path to TLS private key file
 ///
 /// # Returns
-/// Returns `Ok(())` when the server shuts down gracefully, or an error if startup/shutdown fails.
+/// ServerHandle for graceful shutdown, or error if startup fails
 pub async fn start_server(
     addr: std::net::SocketAddr,
     tls_cert: Option<std::path::PathBuf>,
     tls_key: Option<std::path::PathBuf>,
-) -> anyhow::Result<()> {
-    use kodegen_server_http::{Managers, RouterSet, register_tool};
-    use kodegen_tools_config::ConfigManager;
+) -> anyhow::Result<kodegen_server_http::ServerHandle> {
+    use kodegen_server_http::{create_http_server, Managers, RouterSet, register_tool};
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
-    use std::sync::Arc;
+    use std::time::Duration;
 
-    // Initialize logging (idempotent)
-    let _ = env_logger::try_init();
-    
-    // Initialize config
-    let config = ConfigManager::new();
-    config.init().await?;
-    
-    // Initialize tool history
-    let timestamp = chrono::Utc::now();
-    let pid = std::process::id();
-    let instance_id = format!("{}-{}", timestamp.format("%Y%m%d-%H%M%S-%9f"), pid);
-    kodegen_mcp_tool::tool_history::init_global_history(instance_id.clone()).await;
-    
-    // Create routers
-    let mut tool_router = ToolRouter::new();
-    let mut prompt_router = PromptRouter::new();
-    let managers = Managers::new();
-    
-    // Fixed server URL for loopback tools (port 30440)
-    let server_url = "http://127.0.0.1:30440/mcp".to_string();
-    
-    // Initialize browser manager (global singleton)
-    let browser_manager = crate::BrowserManager::global();
-    managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
-    
-    // Register research session manager for shutdown
-    managers.register(ResearchSessionManagerWrapper).await;
-    
-    // Register all 13 browser tools
-    
-    // Core browser automation tools (6 tools)
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserNavigateTool::new(browser_manager.clone()),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserClickTool::new(browser_manager.clone()),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserTypeTextTool::new(browser_manager.clone()),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserScreenshotTool::new(browser_manager.clone()),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserExtractTextTool::new(browser_manager.clone()),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserScrollTool::new(browser_manager.clone()),
-    );
-
-    // Advanced browser tools (1 tool)
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
-    );
-
-    // Async research session tools (5 tools)
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::StartBrowserResearchTool::new(),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::GetResearchStatusTool::new(),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::GetResearchResultTool::new(),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::StopBrowserResearchTool::new(),
-    );
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::ListResearchSessionsTool::new(),
-    );
-
-    // Web search tool (1 tool)
-    (tool_router, prompt_router) = register_tool(
-        tool_router,
-        prompt_router,
-        crate::WebSearchTool::new(),
-    );
-    
-    // Create HTTP server
-    let router_set = RouterSet::new(tool_router, prompt_router, managers);
-    
-    let session_config = rmcp::transport::streamable_http_server::session::local::SessionConfig {
-        channel_capacity: 16,
-        keep_alive: Some(std::time::Duration::from_secs(3600)),
+    let tls_config = match (tls_cert, tls_key) {
+        (Some(cert), Some(key)) => Some((cert, key)),
+        _ => None,
     };
-    let session_manager = Arc::new(
-        rmcp::transport::streamable_http_server::session::local::LocalSessionManager {
-            sessions: Default::default(),
-            session_config,
-        }
-    );
-    
-    let usage_tracker = kodegen_utils::usage_tracker::UsageTracker::new(
-        format!("browser-{}", instance_id)
-    );
-    
-    let server = kodegen_server_http::HttpServer::new(
-        router_set.tool_router,
-        router_set.prompt_router,
-        usage_tracker,
-        config,
-        router_set.managers,
-        session_manager,
-    );
-    
-    // Start server
-    let shutdown_timeout = std::time::Duration::from_secs(30);
-    let tls_config = tls_cert.zip(tls_key);
-    let handle = server.serve_with_tls(addr, tls_config, shutdown_timeout).await?;
-    
-    handle.wait_for_completion(shutdown_timeout).await
-        .map_err(|e| anyhow::anyhow!("Server shutdown error: {}", e))?;
-    
-    Ok(())
+
+    let shutdown_timeout = Duration::from_secs(30);
+
+    create_http_server("browser", addr, tls_config, shutdown_timeout, |_config, _tracker| {
+        Box::pin(async move {
+            let mut tool_router = ToolRouter::new();
+            let mut prompt_router = PromptRouter::new();
+            let managers = Managers::new();
+
+            // Fixed server URL for loopback tools (port 30440)
+            let server_url = "http://127.0.0.1:30440/mcp".to_string();
+
+            // Initialize browser manager (global singleton)
+            let browser_manager = crate::BrowserManager::global();
+            managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
+
+            // Register research session manager for shutdown
+            managers.register(ResearchSessionManagerWrapper).await;
+
+            // Register all 13 browser tools
+
+            // Core browser automation tools (6 tools)
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserNavigateTool::new(browser_manager.clone()),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserClickTool::new(browser_manager.clone()),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserTypeTextTool::new(browser_manager.clone()),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserScreenshotTool::new(browser_manager.clone()),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserExtractTextTool::new(browser_manager.clone()),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserScrollTool::new(browser_manager.clone()),
+            );
+
+            // Advanced browser tools (1 tool)
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
+            );
+
+            // Async research session tools (5 tools)
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::StartBrowserResearchTool::new(),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::GetResearchStatusTool::new(),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::GetResearchResultTool::new(),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::StopBrowserResearchTool::new(),
+            );
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::ListResearchSessionsTool::new(),
+            );
+
+            // Web search tool (1 tool)
+            (tool_router, prompt_router) = register_tool(
+                tool_router,
+                prompt_router,
+                crate::WebSearchTool::new(),
+            );
+
+            Ok(RouterSet::new(tool_router, prompt_router, managers))
+        })
+    }).await
 }
