@@ -1,4 +1,4 @@
-//! `start_browser_research` MCP tool implementation
+//! `browser_start_research` MCP tool implementation
 //!
 //! Starts async browser research session that runs in the background.
 //! Returns session_id immediately for polling progress and results.
@@ -7,8 +7,8 @@ use crate::research::{ResearchSessionManager, ResearchStatus};
 use crate::utils::{DeepResearch, ResearchOptions};
 use kodegen_mcp_schema::browser::{StartBrowserResearchArgs, StartBrowserResearchPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 
 // =============================================================================
@@ -16,16 +16,16 @@ use std::sync::Arc;
 // =============================================================================
 
 #[derive(Clone)]
-pub struct StartBrowserResearchTool;
+pub struct BrowserStartResearchTool;
 
-impl StartBrowserResearchTool {
+impl BrowserStartResearchTool {
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for StartBrowserResearchTool {
+impl Default for BrowserStartResearchTool {
     fn default() -> Self {
         Self::new()
     }
@@ -35,12 +35,12 @@ impl Default for StartBrowserResearchTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for StartBrowserResearchTool {
+impl Tool for BrowserStartResearchTool {
     type Args = StartBrowserResearchArgs;
     type PromptArgs = StartBrowserResearchPromptArgs;
 
     fn name() -> &'static str {
-        "start_browser_research"
+        "browser_start_research"
     }
 
     fn description() -> &'static str {
@@ -65,7 +65,7 @@ impl Tool for StartBrowserResearchTool {
         true // Can research arbitrary URLs from search results
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Validate query
         if args.query.trim().is_empty() {
             return Err(McpError::invalid_arguments("Research query cannot be empty"));
@@ -146,12 +146,33 @@ impl Tool for StartBrowserResearchTool {
         }
 
         // Return session ID immediately
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let summary = format!(
+            "✓ Research session started\n\n\
+             Session ID: {}\n\
+             Query: {}\n\
+             Status: Running\n\
+             Max pages: {}\n\
+             Max depth: {}\n\n\
+             Use get_research_status to monitor progress.",
+            session_id, args.query, args.max_pages, args.max_depth
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "session_id": session_id,
             "status": ResearchStatus::Running,
             "query": args.query,
             "message": "Research session started. Use get_research_status to monitor progress."
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

@@ -3,8 +3,8 @@
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{CallArgument, CallFunctionOnParams};
 use kodegen_mcp_schema::browser::{BrowserScrollArgs, BrowserScrollPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -40,7 +40,7 @@ impl Tool for BrowserScrollTool {
         false // Scrolling changes viewport state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager
@@ -92,12 +92,29 @@ impl Tool for BrowserScrollTool {
                 ))
             })?;
 
-            Ok(json!({
+            let mut contents = Vec::new();
+
+            // Terminal summary
+            let summary = format!(
+                "✓ Scrolled to element\n\n\
+                 Selector: {}\n\
+                 Action: scroll_to_element",
+                selector
+            );
+            contents.push(Content::text(summary));
+
+            // JSON metadata
+            let metadata = json!({
                 "success": true,
                 "action": "scroll_to_element",
                 "selector": selector,
                 "message": format!("Scrolled to element: {}", selector)
-            }))
+            });
+            let json_str = serde_json::to_string_pretty(&metadata)
+                .unwrap_or_else(|_| "{}".to_string());
+            contents.push(Content::text(json_str));
+
+            Ok(contents)
         } else {
             // Scroll by amount
             // Validate scroll amounts (defense-in-depth)
@@ -131,13 +148,31 @@ impl Tool for BrowserScrollTool {
                 ))
             })?;
 
-            Ok(json!({
+            let mut contents = Vec::new();
+
+            // Terminal summary
+            let summary = format!(
+                "✓ Scrolled by amount\n\n\
+                 X offset: {}px\n\
+                 Y offset: {}px\n\
+                 Action: scroll_by_amount",
+                x, y
+            );
+            contents.push(Content::text(summary));
+
+            // JSON metadata
+            let metadata = json!({
                 "success": true,
                 "action": "scroll_by_amount",
                 "x": x,
                 "y": y,
                 "message": format!("Scrolled by x={}, y={}", x, y)
-            }))
+            });
+            let json_str = serde_json::to_string_pretty(&metadata)
+                .unwrap_or_else(|_| "{}".to_string());
+            contents.push(Content::text(json_str));
+
+            Ok(contents)
         }
     }
 

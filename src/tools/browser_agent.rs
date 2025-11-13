@@ -4,7 +4,7 @@ use crate::manager::BrowserManager;
 use crate::utils::AgentState;
 use kodegen_mcp_schema::browser::{BrowserAgentArgs, BrowserAgentPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -47,7 +47,7 @@ impl Tool for BrowserAgentTool {
         true // Agent can navigate to any URL
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Create loopback MCP client (connects to same server)
         // By the time this tool executes, the server is fully running
         let (mcp_client, _connection) = kodegen_mcp_client::create_streamable_client(&self.server_url)
@@ -130,14 +130,36 @@ impl Tool for BrowserAgentTool {
             })
             .collect();
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let status_icon = if is_complete { "✓" } else { "⚠" };
+        let status_text = if is_complete { "Complete" } else { "Incomplete" };
+        
+        let summary = format!(
+            "{} Browser agent execution\n\n\
+             Task: {}\n\
+             Status: {}\n\
+             Steps: {}/{}\n\n\
+             Result:\n{}",
+            status_icon, args.task, status_text, steps_taken, args.max_steps, final_result
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "success": is_complete,
             "steps_taken": steps_taken,
             "max_steps": args.max_steps,
             "final_result": final_result,
             "task": args.task,
             "actions": actions,
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

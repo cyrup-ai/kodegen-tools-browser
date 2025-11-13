@@ -1,29 +1,29 @@
 //! Browser automation tool implementations
 
 mod browser_agent;
+mod browser_get_research_result;
+mod browser_get_research_status;
+mod browser_list_research_sessions;
+mod browser_start_research;
+mod browser_stop_research;
+mod browser_web_search;
 mod click;
 mod extract_text;
-mod get_research_result;
-mod get_research_status;
-mod list_research_sessions;
 mod navigate;
 mod screenshot;
 mod scroll;
-mod start_browser_research;
-mod stop_browser_research;
 mod type_text;
-mod web_search;
 
 pub use browser_agent::BrowserAgentTool;
+pub use browser_get_research_result::BrowserGetResearchResultTool;
+pub use browser_get_research_status::BrowserGetResearchStatusTool;
+pub use browser_list_research_sessions::BrowserListResearchSessionsTool;
+pub use browser_start_research::BrowserStartResearchTool;
+pub use browser_stop_research::BrowserStopResearchTool;
+pub use browser_web_search::BrowserWebSearchTool;
 pub use click::BrowserClickTool;
 pub use extract_text::BrowserExtractTextTool;
-pub use get_research_result::GetResearchResultTool;
-pub use get_research_status::GetResearchStatusTool;
-pub use list_research_sessions::ListResearchSessionsTool;
 pub use navigate::BrowserNavigateTool;
 pub use screenshot::BrowserScreenshotTool;
 pub use scroll::BrowserScrollTool;
-pub use start_browser_research::StartBrowserResearchTool;
-pub use stop_browser_research::StopBrowserResearchTool;
 pub use type_text::BrowserTypeTextTool;
-pub use web_search::WebSearchTool;

@@ -2,8 +2,8 @@
 
 use kodegen_mcp_schema::browser::{BrowserTypeTextArgs, BrowserTypeTextPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +39,7 @@ impl Tool for BrowserTypeTextTool {
         false // Typing changes page state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Validate selector
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));
@@ -135,7 +135,22 @@ impl Tool for BrowserTypeTextTool {
             ))
         })?;
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let summary = format!(
+            "✓ Text entered\n\n\
+             Selector: {}\n\
+             Characters: {}\n\
+             Cleared first: {}",
+            args.selector,
+            args.text.len(),
+            args.clear
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "success": true,
             "selector": args.selector,
             "text_length": args.text.len(),
@@ -146,7 +161,12 @@ impl Tool for BrowserTypeTextTool {
                 args.selector,
                 if args.clear { " (cleared first)" } else { "" }
             )
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

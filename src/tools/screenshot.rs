@@ -5,8 +5,8 @@ use chromiumoxide::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use kodegen_mcp_schema::browser::{BrowserScreenshotArgs, BrowserScreenshotPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -41,7 +41,7 @@ impl Tool for BrowserScreenshotTool {
         true // Screenshots don't modify browser state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager
@@ -127,19 +127,53 @@ impl Tool for BrowserScreenshotTool {
         // Encode as base64
         let base64_image = BASE64.encode(&image_data);
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary (truncate base64 preview)
+        let preview = if base64_image.len() > 50 {
+            format!("{}... ({} chars)", &base64_image[..50], base64_image.len())
+        } else {
+            base64_image.clone()
+        };
+
+        let target = if args.selector.is_some() {
+            "element"
+        } else {
+            "full page"
+        };
+
+        let summary = format!(
+            "✓ Screenshot captured\n\n\
+             Format: {}\n\
+             Target: {}\n\
+             Size: {} bytes\n\
+             Data preview: {}",
+            format_str.to_uppercase(),
+            target,
+            image_data.len(),
+            preview
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata (full base64)
+        let metadata = json!({
             "success": true,
             "image": base64_image,
             "format": format_str,
             "size_bytes": image_data.len(),
             "selector": args.selector,
             "message": format!(
-                "Screenshot captured ({} bytes, {} format{})",
+                "Screenshot captured ({} bytes, {} format, {})",
                 image_data.len(),
                 format_str.to_uppercase(),
-                if args.selector.is_some() { ", element only" } else { ", full page" }
+                target
             )
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

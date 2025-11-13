@@ -1,28 +1,28 @@
-//! `get_research_status` MCP tool implementation
+//! `browser_get_research_status` MCP tool implementation
 //!
 //! Retrieves current status and progress of a browser research session.
 
-use crate::research::ResearchSessionManager;
+use crate::research::{ResearchSessionManager, ResearchStatus};
 use kodegen_mcp_schema::browser::{GetResearchStatusArgs, GetResearchStatusPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 
 // =============================================================================
 // Tool Struct
 // =============================================================================
 
 #[derive(Clone)]
-pub struct GetResearchStatusTool;
+pub struct BrowserGetResearchStatusTool;
 
-impl GetResearchStatusTool {
+impl BrowserGetResearchStatusTool {
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for GetResearchStatusTool {
+impl Default for BrowserGetResearchStatusTool {
     fn default() -> Self {
         Self::new()
     }
@@ -32,12 +32,12 @@ impl Default for GetResearchStatusTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for GetResearchStatusTool {
+impl Tool for BrowserGetResearchStatusTool {
     type Args = GetResearchStatusArgs;
     type PromptArgs = GetResearchStatusPromptArgs;
 
     fn name() -> &'static str {
-        "get_research_status"
+        "browser_get_research_status"
     }
 
     fn description() -> &'static str {
@@ -59,7 +59,7 @@ impl Tool for GetResearchStatusTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get global session manager
         let manager = ResearchSessionManager::global();
 
@@ -77,13 +77,46 @@ impl Tool for GetResearchStatusTool {
         let results_so_far = session.total_results.load(std::sync::atomic::Ordering::Acquire);
         let has_result = session.is_complete();
         
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let status_icon = match session.status {
+            ResearchStatus::Running => "⏳",
+            ResearchStatus::Completed => "✓",
+            ResearchStatus::Failed => "✗",
+            ResearchStatus::Cancelled => "⚠",
+        };
+        
+        let pages_visited = session.progress.last().map(|p| p.pages_visited).unwrap_or(0);
+        let current_step = session.progress.last().map(|p| p.message.clone()).unwrap_or_default();
+        
+        let summary = format!(
+            "{} Research status: {:?}\n\n\
+             Query: {}\n\
+             Session ID: {}\n\
+             Runtime: {}s\n\
+             Pages visited: {}\n\
+             Results collected: {}\n\
+             Current step: {}",
+            status_icon,
+            session.status,
+            session.query,
+            session.session_id,
+            session.runtime_seconds(),
+            pages_visited,
+            results_so_far,
+            current_step
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "session_id": session.session_id,
             "query": session.query,
             "status": session.status,
             "runtime_seconds": session.runtime_seconds(),
-            "pages_visited": session.progress.last().map(|p| p.pages_visited).unwrap_or(0),
-            "current_step": session.progress.last().map(|p| p.message.clone()).unwrap_or_default(),
+            "pages_visited": pages_visited,
+            "current_step": current_step,
             "total_steps": session.progress.len(),
             "progress_history": session.progress.iter().map(|step| json!({
                 "timestamp": step.timestamp,
@@ -93,7 +126,12 @@ impl Tool for GetResearchStatusTool {
             "has_result": has_result,
             "results_so_far": results_so_far,
             "has_error": session.error.is_some(),
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

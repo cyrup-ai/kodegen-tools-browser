@@ -1,28 +1,28 @@
-//! `web_search` MCP tool implementation
+//! `browser_web_search` MCP tool implementation
 //!
 //! Performs web searches and returns structured results with titles, URLs, and snippets.
 
 use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchPromptArgs};
 use kodegen_mcp_tool::Tool;
 use kodegen_mcp_tool::error::McpError;
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 
 // =============================================================================
 // Tool Struct
 // =============================================================================
 
 #[derive(Clone)]
-pub struct WebSearchTool;
+pub struct BrowserWebSearchTool;
 
-impl WebSearchTool {
+impl BrowserWebSearchTool {
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for WebSearchTool {
+impl Default for BrowserWebSearchTool {
     fn default() -> Self {
         Self::new()
     }
@@ -32,12 +32,12 @@ impl Default for WebSearchTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for WebSearchTool {
+impl Tool for BrowserWebSearchTool {
     type Args = WebSearchArgs;
     type PromptArgs = WebSearchPromptArgs;
 
     fn name() -> &'static str {
-        "web_search"
+        "browser_web_search"
     }
 
     fn description() -> &'static str {
@@ -64,7 +64,7 @@ impl Tool for WebSearchTool {
         true
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Validate query is not empty
         if args.query.trim().is_empty() {
             return Err(McpError::invalid_arguments("Search query cannot be empty"));
@@ -78,8 +78,42 @@ impl Tool for WebSearchTool {
             .await
             .map_err(McpError::Other)?;
 
-        // Convert to JSON response
-        Ok(json!({
+        // Convert to Vec<Content> response
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let summary = if results.results.is_empty() {
+            format!(
+                "⚠ No results found\n\n\
+                 Query: {}\n\
+                 Result count: 0",
+                results.query
+            )
+        } else {
+            let top_results: Vec<String> = results.results.iter()
+                .take(3)
+                .map(|r| format!("  {}. {} ({})", r.rank, r.title, r.url))
+                .collect();
+            
+            format!(
+                "✓ Search complete\n\n\
+                 Query: {}\n\
+                 Result count: {}\n\n\
+                 Top results:\n{}{}",
+                results.query,
+                results.results.len(),
+                top_results.join("\n"),
+                if results.results.len() > 3 { 
+                    format!("\n  ... {} more results", results.results.len() - 3) 
+                } else { 
+                    String::new() 
+                }
+            )
+        };
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "query": results.query,
             "result_count": results.results.len(),
             "results": results.results.iter().map(|r| json!({
@@ -88,7 +122,12 @@ impl Tool for WebSearchTool {
                 "url": r.url,
                 "snippet": r.snippet,
             })).collect::<Vec<_>>(),
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

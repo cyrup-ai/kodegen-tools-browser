@@ -95,34 +95,34 @@ async fn main() -> Result<()> {
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            StartBrowserResearchTool::new(),
+            BrowserStartResearchTool::new(),
         );
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            GetResearchStatusTool::new(),
+            BrowserGetResearchStatusTool::new(),
         );
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            GetResearchResultTool::new(),
+            BrowserGetResearchResultTool::new(),
         );
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            StopBrowserResearchTool::new(),
+            BrowserStopResearchTool::new(),
         );
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            ListResearchSessionsTool::new(),
+            BrowserListResearchSessionsTool::new(),
         );
 
         // Web search tool (1 tool)
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            WebSearchTool::new(),
+            BrowserWebSearchTool::new(),
         );
 
         Ok(RouterSet::new(tool_router, prompt_router, managers))

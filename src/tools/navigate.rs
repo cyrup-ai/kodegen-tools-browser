@@ -2,7 +2,7 @@
 
 use kodegen_mcp_schema::browser::{BrowserNavigateArgs, BrowserNavigatePromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -147,10 +147,55 @@ impl Tool for BrowserNavigateTool {
         true // Accesses external URLs
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+        // Store args values before moving into navigate_and_capture_page
+        let timeout_ms = args.timeout_ms.unwrap_or(30000);
+        let requested_url = args.url.clone();
+        
         // Delegate to internal method and discard Page handle
         let (_page, result) = self.navigate_and_capture_page(args).await?;
-        Ok(result)
+        
+        // Extract data from result JSON
+        let final_url = result.get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&requested_url);
+        let redirected = result.get("redirected")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let redirect_info = if redirected {
+            format!("\n  Redirected: {} → {}", requested_url, final_url)
+        } else {
+            String::new()
+        };
+
+        let summary = format!(
+            "✓ Navigation complete\n\n\
+             URL: {}{}\n\
+             Timeout: {}ms",
+            final_url,
+            redirect_info,
+            timeout_ms
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata (preserve all original fields)
+        let metadata = json!({
+            "success": true,
+            "url": final_url,
+            "requested_url": requested_url,
+            "redirected": redirected,
+            "timeout_ms": timeout_ms,
+            "message": format!("Navigated to {}", final_url)
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

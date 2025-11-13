@@ -1,27 +1,27 @@
-//! `get_research_result` MCP tool implementation
+//! `browser_get_research_result` MCP tool implementation
 //!
 //! Retrieves final results from a completed browser research session.
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
 use kodegen_mcp_schema::browser::{GetResearchResultArgs, GetResearchResultPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 
 // =============================================================================
 // Tool Struct
 // =============================================================================
 
 #[derive(Clone)]
-pub struct GetResearchResultTool;
+pub struct BrowserGetResearchResultTool;
 
-impl Default for GetResearchResultTool {
+impl Default for BrowserGetResearchResultTool {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl GetResearchResultTool {
+impl BrowserGetResearchResultTool {
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -32,12 +32,12 @@ impl GetResearchResultTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for GetResearchResultTool {
+impl Tool for BrowserGetResearchResultTool {
     type Args = GetResearchResultArgs;
     type PromptArgs = GetResearchResultPromptArgs;
 
     fn name() -> &'static str {
-        "get_research_result"
+        "browser_get_research_result"
     }
 
     fn description() -> &'static str {
@@ -59,7 +59,7 @@ impl Tool for GetResearchResultTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get global session manager
         let manager = ResearchSessionManager::global();
 
@@ -150,13 +150,49 @@ impl Tool for GetResearchResultTool {
                         })).collect::<Vec<_>>(),
                     });
                     
-                    Ok(json!({
+                    let mut contents = Vec::new();
+
+                    // Terminal summary
+                    let summary_text = format!(
+                        "✓ Research completed\n\n\
+                         Query: {}\n\
+                         Session ID: {}\n\
+                         Pages visited: {}\n\
+                         Runtime: {}s\n\n\
+                         Key Findings:\n{}\n\n\
+                         Sources:\n{}",
+                        query,
+                        session_id,
+                        pages_visited,
+                        runtime_seconds,
+                        key_findings.iter()
+                            .take(5)
+                            .enumerate()
+                            .map(|(i, f)| format!("  {}. {}", i + 1, f))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        sources.iter()
+                            .take(5)
+                            .enumerate()
+                            .map(|(i, s)| format!("  {}. {}", i + 1, s))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
+                    contents.push(Content::text(summary_text));
+
+                    // JSON metadata
+                    let metadata = json!({
                         "session_id": session_id,
                         "query": query,
                         "status": "completed",
                         "runtime_seconds": runtime_seconds,
                         "result": result_json,
-                    }))
+                    });
+                    let json_str = serde_json::to_string_pretty(&metadata)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    contents.push(Content::text(json_str));
+
+                    Ok(contents)
                 }
             }
         }

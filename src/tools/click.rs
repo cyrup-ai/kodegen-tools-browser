@@ -2,8 +2,8 @@
 
 use kodegen_mcp_schema::browser::{BrowserClickArgs, BrowserClickPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +39,7 @@ impl Tool for BrowserClickTool {
         false // Clicking changes page state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Validate selector not empty
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));
@@ -115,11 +115,30 @@ impl Tool for BrowserClickTool {
             })?;
         }
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let summary = format!(
+            "✓ Element clicked\n\n\
+             Selector: {}\n\
+             Navigation: {}",
+            args.selector,
+            if args.wait_for_navigation.unwrap_or(false) { "waited" } else { "immediate" }
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "success": true,
             "selector": args.selector,
+            "navigation_waited": args.wait_for_navigation.unwrap_or(false),
             "message": format!("Clicked element: {}", args.selector)
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

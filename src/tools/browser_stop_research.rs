@@ -1,28 +1,28 @@
-//! `stop_browser_research` MCP tool implementation
+//! `browser_stop_research` MCP tool implementation
 //!
 //! Cancels a running browser research session.
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
 use kodegen_mcp_schema::browser::{StopBrowserResearchArgs, StopBrowserResearchPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 
 // =============================================================================
 // Tool Struct
 // =============================================================================
 
 #[derive(Clone)]
-pub struct StopBrowserResearchTool;
+pub struct BrowserStopResearchTool;
 
-impl StopBrowserResearchTool {
+impl BrowserStopResearchTool {
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for StopBrowserResearchTool {
+impl Default for BrowserStopResearchTool {
     fn default() -> Self {
         Self::new()
     }
@@ -32,12 +32,12 @@ impl Default for StopBrowserResearchTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for StopBrowserResearchTool {
+impl Tool for BrowserStopResearchTool {
     type Args = StopBrowserResearchArgs;
     type PromptArgs = StopBrowserResearchPromptArgs;
 
     fn name() -> &'static str {
-        "stop_browser_research"
+        "browser_stop_research"
     }
 
     fn description() -> &'static str {
@@ -59,7 +59,7 @@ impl Tool for StopBrowserResearchTool {
         false
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get global session manager
         let manager = ResearchSessionManager::global();
 
@@ -77,14 +77,39 @@ impl Tool for StopBrowserResearchTool {
 
         let session = session_ref.lock().await;
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let pages_visited = session.progress.last().map(|p| p.pages_visited).unwrap_or(0);
+        let runtime_seconds = session.runtime_seconds();
+        
+        let summary = format!(
+            "⚠ Research cancelled\n\n\
+             Session ID: {}\n\
+             Query: {}\n\
+             Runtime: {}s\n\
+             Pages visited: {}",
+            session.session_id,
+            session.query,
+            runtime_seconds,
+            pages_visited
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "session_id": session.session_id,
             "query": session.query,
             "status": ResearchStatus::Cancelled,
-            "runtime_seconds": session.runtime_seconds(),
-            "pages_visited": session.progress.last().map(|p| p.pages_visited).unwrap_or(0),
-            "message": format!("Research cancelled after {} seconds", session.runtime_seconds())
-        }))
+            "runtime_seconds": runtime_seconds,
+            "pages_visited": pages_visited,
+            "message": format!("Research cancelled after {} seconds", runtime_seconds)
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

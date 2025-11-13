@@ -143,8 +143,8 @@ pub use manager::BrowserManager;
 pub use tools::{
     BrowserAgentTool, BrowserClickTool, BrowserExtractTextTool, BrowserNavigateTool,
     BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTextTool,
-    GetResearchResultTool, GetResearchStatusTool, ListResearchSessionsTool,
-    StartBrowserResearchTool, StopBrowserResearchTool, WebSearchTool,
+    BrowserGetResearchResultTool, BrowserGetResearchStatusTool, BrowserListResearchSessionsTool,
+    BrowserStartResearchTool, BrowserStopResearchTool, BrowserWebSearchTool,
 };
 
 // Shutdown hook wrappers
@@ -196,8 +196,9 @@ pub async fn start_server(
     };
 
     let shutdown_timeout = Duration::from_secs(30);
+    let session_keep_alive = Duration::from_secs(300);
 
-    create_http_server("browser", addr, tls_config, shutdown_timeout, |_config, _tracker| {
+    create_http_server("browser", addr, tls_config, shutdown_timeout, session_keep_alive, |_config, _tracker| {
         Box::pin(async move {
             let mut tool_router = ToolRouter::new();
             let mut prompt_router = PromptRouter::new();
@@ -258,34 +259,34 @@ pub async fn start_server(
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::StartBrowserResearchTool::new(),
+                crate::BrowserStartResearchTool::new(),
             );
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::GetResearchStatusTool::new(),
+                crate::BrowserGetResearchStatusTool::new(),
             );
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::GetResearchResultTool::new(),
+                crate::BrowserGetResearchResultTool::new(),
             );
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::StopBrowserResearchTool::new(),
+                crate::BrowserStopResearchTool::new(),
             );
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::ListResearchSessionsTool::new(),
+                crate::BrowserListResearchSessionsTool::new(),
             );
 
             // Web search tool (1 tool)
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::WebSearchTool::new(),
+                crate::BrowserWebSearchTool::new(),
             );
 
             Ok(RouterSet::new(tool_router, prompt_router, managers))

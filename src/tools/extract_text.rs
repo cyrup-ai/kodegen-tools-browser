@@ -2,8 +2,8 @@
 
 use kodegen_mcp_schema::browser::{BrowserExtractTextArgs, BrowserExtractTextPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +39,7 @@ impl Tool for BrowserExtractTextTool {
         true // Extraction doesn't modify page
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get or create browser instance
         let browser_arc = self
             .manager
@@ -151,18 +151,46 @@ impl Tool for BrowserExtractTextTool {
             }
         };
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        let source = if args.selector.is_some() { "element" } else { "full page" };
+        
+        // Terminal summary (truncate long text)
+        let text_preview = if text.len() > 200 {
+            format!("{}... ({} total chars)", &text[..200], text.len())
+        } else {
+            text.clone()
+        };
+
+        let summary = format!(
+            "✓ Text extracted\n\n\
+             Source: {}\n\
+             Characters: {}\n\n\
+             Preview:\n{}",
+            source,
+            text.len(),
+            text_preview
+        );
+        contents.push(Content::text(summary));
+
+        // JSON metadata (full text)
+        let metadata = json!({
             "success": true,
             "text": text,
             "length": text.len(),
             "selector": args.selector,
-            "source": if args.selector.is_some() { "element" } else { "page" },
+            "source": source,
             "message": format!(
                 "Extracted {} characters from {}",
                 text.len(),
                 args.selector.as_ref().unwrap_or(&"full page".to_string())
             )
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

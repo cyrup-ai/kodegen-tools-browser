@@ -1,28 +1,28 @@
-//! `list_research_sessions` MCP tool implementation
+//! `browser_list_research_sessions` MCP tool implementation
 //!
 //! Lists all active browser research sessions.
 
 use crate::research::ResearchSessionManager;
 use kodegen_mcp_schema::browser::{ListResearchSessionsArgs, ListResearchSessionsPromptArgs};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::json;
 
 // =============================================================================
 // Tool Struct
 // =============================================================================
 
 #[derive(Clone)]
-pub struct ListResearchSessionsTool;
+pub struct BrowserListResearchSessionsTool;
 
-impl ListResearchSessionsTool {
+impl BrowserListResearchSessionsTool {
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for ListResearchSessionsTool {
+impl Default for BrowserListResearchSessionsTool {
     fn default() -> Self {
         Self::new()
     }
@@ -32,12 +32,12 @@ impl Default for ListResearchSessionsTool {
 // Tool Trait Implementation
 // =============================================================================
 
-impl Tool for ListResearchSessionsTool {
+impl Tool for BrowserListResearchSessionsTool {
     type Args = ListResearchSessionsArgs;
     type PromptArgs = ListResearchSessionsPromptArgs;
 
     fn name() -> &'static str {
-        "list_research_sessions"
+        "browser_list_research_sessions"
     }
 
     fn description() -> &'static str {
@@ -59,17 +59,56 @@ impl Tool for ListResearchSessionsTool {
         false
     }
 
-    async fn execute(&self, _args: Self::Args) -> Result<Value, McpError> {
+    async fn execute(&self, _args: Self::Args) -> Result<Vec<Content>, McpError> {
         // Get global session manager
         let manager = ResearchSessionManager::global();
 
         // List all sessions
         let sessions = manager.list_sessions().await;
 
-        Ok(json!({
+        let mut contents = Vec::new();
+
+        // Terminal summary
+        let summary = if sessions.is_empty() {
+            "No active research sessions".to_string()
+        } else {
+            let session_list: Vec<String> = sessions.iter()
+                .map(|s| {
+                    let session_id = s["session_id"].as_str().unwrap_or("unknown");
+                    let query = s["query"].as_str().unwrap_or("unknown");
+                    let status = s["status"].as_str().unwrap_or("unknown");
+                    let runtime = s["runtime_seconds"].as_u64().unwrap_or(0);
+                    
+                    format!(
+                        "  • {} - {} ({}, {}s)",
+                        &session_id[..8.min(session_id.len())],
+                        query,
+                        status,
+                        runtime
+                    )
+                })
+                .collect();
+            
+            format!(
+                "✓ Research sessions\n\n\
+                 Total: {}\n\n\
+                 {}",
+                sessions.len(),
+                session_list.join("\n")
+            )
+        };
+        contents.push(Content::text(summary));
+
+        // JSON metadata
+        let metadata = json!({
             "total_sessions": sessions.len(),
             "sessions": sessions,
-        }))
+        });
+        let json_str = serde_json::to_string_pretty(&metadata)
+            .unwrap_or_else(|_| "{}".to_string());
+        contents.push(Content::text(json_str));
+
+        Ok(contents)
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
