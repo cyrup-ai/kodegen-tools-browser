@@ -1,4 +1,5 @@
 use tracing::{debug, info, warn};
+use kodegen_mcp_schema::browser::{BROWSER_NAVIGATE, BROWSER_CLICK, BROWSER_TYPE_TEXT, BROWSER_SCROLL, BROWSER_EXTRACT_TEXT};
 use crate::agent::{ActionModel, ActionResult, AgentError, AgentResult};
 use super::processor::AgentInner;
 
@@ -33,7 +34,7 @@ impl AgentInner {
                             AgentError::StepFailed("Missing 'url' parameter".into())
                         })?;
                         (
-                            "browser_navigate",
+                            BROWSER_NAVIGATE,
                             serde_json::json!({
                                 "url": url,
                                 "timeout_ms": 30000
@@ -60,7 +61,7 @@ impl AgentInner {
                             ));
                         };
                         (
-                            "browser_click",
+                            BROWSER_CLICK,
                             serde_json::json!({
                                 "selector": selector,
                                 "timeout_ms": 5000
@@ -89,7 +90,7 @@ impl AgentInner {
                             AgentError::StepFailed("Missing 'text' parameter".into())
                         })?;
                         (
-                            "browser_type_text",
+                            BROWSER_TYPE_TEXT,
                             serde_json::json!({
                                 "selector": selector,
                                 "text": text,
@@ -133,14 +134,14 @@ impl AgentInner {
                         };
 
                         (
-                            "browser_scroll",
+                            BROWSER_SCROLL,
                             serde_json::json!({
                                 "x": x,
                                 "y": y
                             }),
                         )
                     }
-                    "extract_page_content" => ("browser_extract_text", serde_json::json!({})),
+                    "extract_page_content" => (BROWSER_EXTRACT_TEXT, serde_json::json!({})),
                     "done" => {
                         // Special case: mark completion without MCP call
                         // Agent protocol uses "done" to signal task completion

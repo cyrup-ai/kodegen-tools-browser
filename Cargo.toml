@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_browser"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -34,7 +34,7 @@ crate-type = ["lib"]
 
 [dependencies]
 
-kodegen_mcp_schema = { version = "0.1" }
+kodegen_mcp_schema = { version = "0.2" }
 kodegen_mcp_tool = { version = "0.2" }
 kodegen_server_http = { version = "0.2" }
 kodegen_config_manager = { version = "0.2" }

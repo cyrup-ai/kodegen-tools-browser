@@ -3,6 +3,7 @@ use tokio::time::Duration;
 use tokio_stream::StreamExt;
 use tracing::{debug, warn};
 use kodegen_candle_agent::prelude::*;
+use kodegen_mcp_schema::browser::{BROWSER_EXTRACT_TEXT, BROWSER_SCREENSHOT};
 use cyrup_sugars::prelude::MessageChunk;
 
 use crate::agent::{AgentError, AgentResult, BrowserExtractTextResponse, BrowserScreenshotResponse};
@@ -32,7 +33,7 @@ impl AgentInner {
         // Extract page content via MCP (HOT PATH!)
         let content = match self
             .mcp_client
-            .call_tool("browser_extract_text", serde_json::json!({}))
+            .call_tool(BROWSER_EXTRACT_TEXT, serde_json::json!({}))
             .await
         {
             Ok(result) => {
@@ -61,7 +62,7 @@ impl AgentInner {
         // Get screenshot via MCP and save to temp file (HOT PATH!)
         let screenshot_path = match self
             .mcp_client
-            .call_tool("browser_screenshot", serde_json::json!({}))
+            .call_tool(BROWSER_SCREENSHOT, serde_json::json!({}))
             .await
         {
             Ok(result) => {

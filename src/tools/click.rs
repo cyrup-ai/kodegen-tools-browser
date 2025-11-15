@@ -1,6 +1,6 @@
 //! Browser click tool - clicks elements by CSS selector
 
-use kodegen_mcp_schema::browser::{BrowserClickArgs, BrowserClickPromptArgs};
+use kodegen_mcp_schema::browser::{BrowserClickArgs, BrowserClickPromptArgs, BROWSER_CLICK};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -25,7 +25,7 @@ impl Tool for BrowserClickTool {
     type PromptArgs = BrowserClickPromptArgs;
 
     fn name() -> &'static str {
-        "browser_click"
+        BROWSER_CLICK
     }
 
     fn description() -> &'static str {

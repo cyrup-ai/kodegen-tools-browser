@@ -3,7 +3,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chromiumoxide::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
-use kodegen_mcp_schema::browser::{BrowserScreenshotArgs, BrowserScreenshotPromptArgs};
+use kodegen_mcp_schema::browser::{BrowserScreenshotArgs, BrowserScreenshotPromptArgs, BROWSER_SCREENSHOT};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -27,7 +27,7 @@ impl Tool for BrowserScreenshotTool {
     type PromptArgs = BrowserScreenshotPromptArgs;
 
     fn name() -> &'static str {
-        "browser_screenshot"
+        BROWSER_SCREENSHOT
     }
 
     fn description() -> &'static str {

@@ -3,7 +3,7 @@
 //! Lists all active browser research sessions.
 
 use crate::research::ResearchSessionManager;
-use kodegen_mcp_schema::browser::{ListResearchSessionsArgs, ListResearchSessionsPromptArgs};
+use kodegen_mcp_schema::browser::{ListResearchSessionsArgs, ListResearchSessionsPromptArgs, BROWSER_LIST_RESEARCH_SESSIONS};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -37,7 +37,7 @@ impl Tool for BrowserListResearchSessionsTool {
     type PromptArgs = ListResearchSessionsPromptArgs;
 
     fn name() -> &'static str {
-        "browser_list_research_sessions"
+        BROWSER_LIST_RESEARCH_SESSIONS
     }
 
     fn description() -> &'static str {

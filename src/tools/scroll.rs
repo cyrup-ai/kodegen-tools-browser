@@ -1,7 +1,7 @@
 //! Browser scroll tool - scrolls page or to specific element
 
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{CallArgument, CallFunctionOnParams};
-use kodegen_mcp_schema::browser::{BrowserScrollArgs, BrowserScrollPromptArgs};
+use kodegen_mcp_schema::browser::{BrowserScrollArgs, BrowserScrollPromptArgs, BROWSER_SCROLL};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -26,7 +26,7 @@ impl Tool for BrowserScrollTool {
     type PromptArgs = BrowserScrollPromptArgs;
 
     fn name() -> &'static str {
-        "browser_scroll"
+        BROWSER_SCROLL
     }
 
     fn description() -> &'static str {

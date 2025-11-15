@@ -2,6 +2,7 @@
 //!
 //! Performs web searches and returns structured results with titles, URLs, and snippets.
 
+use kodegen_mcp_schema::browser::BROWSER_WEB_SEARCH;
 use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchPromptArgs};
 use kodegen_mcp_tool::Tool;
 use kodegen_mcp_tool::error::McpError;
@@ -37,7 +38,7 @@ impl Tool for BrowserWebSearchTool {
     type PromptArgs = WebSearchPromptArgs;
 
     fn name() -> &'static str {
-        "browser_web_search"
+        BROWSER_WEB_SEARCH
     }
 
     fn description() -> &'static str {

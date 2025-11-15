@@ -3,7 +3,7 @@
 //! Retrieves current status and progress of a browser research session.
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
-use kodegen_mcp_schema::browser::{GetResearchStatusArgs, GetResearchStatusPromptArgs};
+use kodegen_mcp_schema::browser::{GetResearchStatusArgs, GetResearchStatusPromptArgs, BROWSER_GET_RESEARCH_STATUS};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -37,7 +37,7 @@ impl Tool for BrowserGetResearchStatusTool {
     type PromptArgs = GetResearchStatusPromptArgs;
 
     fn name() -> &'static str {
-        "browser_get_research_status"
+        BROWSER_GET_RESEARCH_STATUS
     }
 
     fn description() -> &'static str {

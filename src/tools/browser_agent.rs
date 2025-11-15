@@ -2,7 +2,7 @@ use crate::agent::Agent;
 use crate::agent::prompts::{AgentMessagePrompt, SystemPrompt};
 use crate::manager::BrowserManager;
 use crate::utils::AgentState;
-use kodegen_mcp_schema::browser::{BrowserAgentArgs, BrowserAgentPromptArgs};
+use kodegen_mcp_schema::browser::{BrowserAgentArgs, BrowserAgentPromptArgs, BROWSER_AGENT, BROWSER_NAVIGATE};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
@@ -29,7 +29,7 @@ impl Tool for BrowserAgentTool {
     type PromptArgs = BrowserAgentPromptArgs;
 
     fn name() -> &'static str {
-        "browser_agent"
+        BROWSER_AGENT
     }
 
     fn description() -> &'static str {
@@ -65,7 +65,7 @@ impl Tool for BrowserAgentTool {
         if let Some(url) = &args.start_url {
             mcp_client
                 .call_tool(
-                    "browser_navigate",
+                    BROWSER_NAVIGATE,
                     json!({
                         "url": url,
                         "timeout_ms": 30000

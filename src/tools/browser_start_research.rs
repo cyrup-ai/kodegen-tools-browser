@@ -5,7 +5,7 @@
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
 use crate::utils::{DeepResearch, ResearchOptions};
-use kodegen_mcp_schema::browser::{StartBrowserResearchArgs, StartBrowserResearchPromptArgs};
+use kodegen_mcp_schema::browser::{StartBrowserResearchArgs, StartBrowserResearchPromptArgs, BROWSER_START_RESEARCH};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -40,7 +40,7 @@ impl Tool for BrowserStartResearchTool {
     type PromptArgs = StartBrowserResearchPromptArgs;
 
     fn name() -> &'static str {
-        "browser_start_research"
+        BROWSER_START_RESEARCH
     }
 
     fn description() -> &'static str {

@@ -3,7 +3,7 @@
 //! Cancels a running browser research session.
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
-use kodegen_mcp_schema::browser::{StopBrowserResearchArgs, StopBrowserResearchPromptArgs};
+use kodegen_mcp_schema::browser::{StopBrowserResearchArgs, StopBrowserResearchPromptArgs, BROWSER_STOP_RESEARCH};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -37,7 +37,7 @@ impl Tool for BrowserStopResearchTool {
     type PromptArgs = StopBrowserResearchPromptArgs;
 
     fn name() -> &'static str {
-        "browser_stop_research"
+        BROWSER_STOP_RESEARCH
     }
 
     fn description() -> &'static str {

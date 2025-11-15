@@ -1,6 +1,6 @@
 //! Browser type text tool - inputs text into form fields
 
-use kodegen_mcp_schema::browser::{BrowserTypeTextArgs, BrowserTypeTextPromptArgs};
+use kodegen_mcp_schema::browser::{BrowserTypeTextArgs, BrowserTypeTextPromptArgs, BROWSER_TYPE_TEXT};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -25,7 +25,7 @@ impl Tool for BrowserTypeTextTool {
     type PromptArgs = BrowserTypeTextPromptArgs;
 
     fn name() -> &'static str {
-        "browser_type_text"
+        BROWSER_TYPE_TEXT
     }
 
     fn description() -> &'static str {

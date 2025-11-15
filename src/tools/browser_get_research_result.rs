@@ -3,7 +3,7 @@
 //! Retrieves final results from a completed browser research session.
 
 use crate::research::{ResearchSessionManager, ResearchStatus};
-use kodegen_mcp_schema::browser::{GetResearchResultArgs, GetResearchResultPromptArgs};
+use kodegen_mcp_schema::browser::{GetResearchResultArgs, GetResearchResultPromptArgs, BROWSER_GET_RESEARCH_RESULT};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
@@ -37,7 +37,7 @@ impl Tool for BrowserGetResearchResultTool {
     type PromptArgs = GetResearchResultPromptArgs;
 
     fn name() -> &'static str {
-        "browser_get_research_result"
+        BROWSER_GET_RESEARCH_RESULT
     }
 
     fn description() -> &'static str {

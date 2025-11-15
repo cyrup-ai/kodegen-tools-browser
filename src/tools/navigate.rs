@@ -1,6 +1,6 @@
 //! Browser navigation tool - loads URLs and waits for page ready
 
-use kodegen_mcp_schema::browser::{BrowserNavigateArgs, BrowserNavigatePromptArgs};
+use kodegen_mcp_schema::browser::{BrowserNavigateArgs, BrowserNavigatePromptArgs, BROWSER_NAVIGATE};
 use kodegen_mcp_tool::{Tool, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
@@ -129,7 +129,7 @@ impl Tool for BrowserNavigateTool {
     type PromptArgs = BrowserNavigatePromptArgs;
 
     fn name() -> &'static str {
-        "browser_navigate"
+        BROWSER_NAVIGATE
     }
 
     fn description() -> &'static str {
