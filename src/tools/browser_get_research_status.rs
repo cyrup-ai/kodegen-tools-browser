@@ -2,10 +2,14 @@
 //!
 //! Retrieves current status and progress of a browser research session.
 
-use crate::research::{ResearchSessionManager, ResearchStatus};
-use kodegen_mcp_schema::browser::{GetResearchStatusArgs, GetResearchStatusPromptArgs, BROWSER_GET_RESEARCH_STATUS};
+use crate::research::ResearchSessionManager;
+use kodegen_mcp_schema::browser::{
+    BROWSER_GET_RESEARCH_STATUS, GetResearchStatusArgs, GetResearchStatusPromptArgs,
+};
 use kodegen_mcp_tool::{Tool, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use rmcp::model::{
+    Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole,
+};
 use serde_json::json;
 
 // =============================================================================
@@ -64,48 +68,43 @@ impl Tool for BrowserGetResearchStatusTool {
         let manager = ResearchSessionManager::global();
 
         // Get session
-        let session_ref = manager.get_session(&args.session_id)
-            .await
-            .map_err(|e| McpError::invalid_arguments(format!(
-                "Session not found: {}. Use list_research_sessions to see active sessions.", e
-            )))?;
+        let session_ref = manager.get_session(&args.session_id).await.map_err(|e| {
+            McpError::invalid_arguments(format!(
+                "Session not found: {}. Use list_research_sessions to see active sessions.",
+                e
+            ))
+        })?;
 
         // Lock and read session state
         let session = session_ref.lock().await;
 
         // Build response with all progress information
-        let results_so_far = session.total_results.load(std::sync::atomic::Ordering::Acquire);
+        let results_so_far = session
+            .total_results
+            .load(std::sync::atomic::Ordering::Acquire);
         let has_result = session.is_complete();
-        
+
         let mut contents = Vec::new();
 
-        // Terminal summary
-        let status_icon = match session.status {
-            ResearchStatus::Running => "⏳",
-            ResearchStatus::Completed => "✓",
-            ResearchStatus::Failed => "✗",
-            ResearchStatus::Cancelled => "⚠",
-        };
-        
-        let pages_visited = session.progress.last().map(|p| p.pages_visited).unwrap_or(0);
-        let current_step = session.progress.last().map(|p| p.message.clone()).unwrap_or_default();
-        
+        // Terminal summary - 2-line compact format with ANSI colors and Nerd Font icons
+        let pages_visited = session
+            .progress
+            .last()
+            .map(|p| p.pages_visited)
+            .unwrap_or(0);
+        let current_step = session
+            .progress
+            .last()
+            .map(|p| p.message.clone())
+            .unwrap_or_default();
+
         let summary = format!(
-            "{} Research status: {:?}\n\n\
-             Query: {}\n\
-             Session ID: {}\n\
-             Runtime: {}s\n\
-             Pages visited: {}\n\
-             Results collected: {}\n\
-             Current step: {}",
-            status_icon,
+            "\x1b[36m Research Status: {:?}\x1b[0m\n\
+              Session: {} · Pages: {} · Runtime: {}s",
             session.status,
-            session.query,
             session.session_id,
-            session.runtime_seconds(),
             pages_visited,
-            results_so_far,
-            current_step
+            session.runtime_seconds()
         );
         contents.push(Content::text(summary));
 
@@ -127,8 +126,7 @@ impl Tool for BrowserGetResearchStatusTool {
             "results_so_far": results_so_far,
             "has_error": session.error.is_some(),
         });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
+        let json_str = serde_json::to_string_pretty(&metadata).unwrap_or_else(|_| "{}".to_string());
         contents.push(Content::text(json_str));
 
         Ok(contents)

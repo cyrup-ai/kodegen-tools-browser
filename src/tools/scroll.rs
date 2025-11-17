@@ -96,9 +96,8 @@ impl Tool for BrowserScrollTool {
 
             // Terminal summary
             let summary = format!(
-                "✓ Scrolled to element\n\n\
-                 Selector: {}\n\
-                 Action: scroll_to_element",
+                "\x1b[33m ↻ Scroll: to element\x1b[0m\n\
+                  Selector: {} · Action: scroll_to_element",
                 selector
             );
             contents.push(Content::text(summary));
@@ -150,13 +149,26 @@ impl Tool for BrowserScrollTool {
 
             let mut contents = Vec::new();
 
+            // Compute direction from x/y values
+            let direction = match (x, y) {
+                (0, 0) => "none",
+                (0, y_val) if y_val > 0 => "down",
+                (0, _) => "up",
+                (x_val, 0) if x_val > 0 => "right",
+                (_, 0) => "left",
+                (x_val, y_val) if x_val > 0 && y_val > 0 => "down-right",
+                (x_val, y_val) if x_val < 0 && y_val > 0 => "down-left",
+                (x_val, y_val) if x_val > 0 && y_val < 0 => "up-right",
+                _ => "up-left",
+            };
+
+            let total_distance = x.abs() + y.abs();
+
             // Terminal summary
             let summary = format!(
-                "✓ Scrolled by amount\n\n\
-                 X offset: {}px\n\
-                 Y offset: {}px\n\
-                 Action: scroll_by_amount",
-                x, y
+                "\x1b[33m ↻ Scroll: {}\x1b[0m\n\
+                  Direction: {} · Distance: {}px",
+                direction, direction, total_distance
             );
             contents.push(Content::text(summary));
 

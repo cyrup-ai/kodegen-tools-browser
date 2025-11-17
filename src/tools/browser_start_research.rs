@@ -150,14 +150,10 @@ impl Tool for BrowserStartResearchTool {
 
         // Terminal summary
         let summary = format!(
-            "✓ Research session started\n\n\
-             Session ID: {}\n\
-             Query: {}\n\
-             Status: Running\n\
-             Max pages: {}\n\
-             Max depth: {}\n\n\
-             Use get_research_status to monitor progress.",
-            session_id, args.query, args.max_pages, args.max_depth
+            "\x1b[32m󰍉 Research Started: {}\x1b[0m\n\
+              󰌋 Session: {} · Pages: {} · Depth: {}\n\
+              󰋽 Status: running · Use get_research_status to monitor",
+            args.query, session_id, args.max_pages, args.max_depth
         );
         contents.push(Content::text(summary));
 

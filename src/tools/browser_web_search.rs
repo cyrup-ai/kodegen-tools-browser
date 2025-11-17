@@ -85,30 +85,18 @@ impl Tool for BrowserWebSearchTool {
         // Terminal summary
         let summary = if results.results.is_empty() {
             format!(
-                "⚠ No results found\n\n\
-                 Query: {}\n\
-                 Result count: 0",
+                "\x1b[36m󰋱 Web Search: {}\x1b[0m\n 󰈙 Results: 0 · Top: none",
                 results.query
             )
         } else {
-            let top_results: Vec<String> = results.results.iter()
-                .take(3)
-                .map(|r| format!("  {}. {} ({})", r.rank, r.title, r.url))
-                .collect();
-            
+            let first_title = results.results.first()
+                .map_or("none", |r| r.title.as_str());
+
             format!(
-                "✓ Search complete\n\n\
-                 Query: {}\n\
-                 Result count: {}\n\n\
-                 Top results:\n{}{}",
+                "\x1b[36m󰋱 Web Search: {}\x1b[0m\n 󰈙 Results: {} · Top: {}",
                 results.query,
                 results.results.len(),
-                top_results.join("\n"),
-                if results.results.len() > 3 { 
-                    format!("\n  ... {} more results", results.results.len() - 3) 
-                } else { 
-                    String::new() 
-                }
+                first_title
             )
         };
         contents.push(Content::text(summary));
@@ -124,8 +112,10 @@ impl Tool for BrowserWebSearchTool {
                 "snippet": r.snippet,
             })).collect::<Vec<_>>(),
         });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
+        let json_str = match serde_json::to_string_pretty(&metadata) {
+            Ok(s) => s,
+            Err(_) => "{}".to_string(),
+        };
         contents.push(Content::text(json_str));
 
         Ok(contents)

@@ -79,6 +79,29 @@ impl Tool for BrowserScreenshotTool {
             _ => CaptureScreenshotFormat::Png,
         };
 
+        // Get viewport dimensions before taking screenshot
+        let viewport_result = page
+            .evaluate("(() => ({ width: window.innerWidth, height: window.innerHeight }))()")
+            .await
+            .map_err(|e| {
+                McpError::Other(anyhow::anyhow!(
+                    "Failed to get viewport dimensions: {}",
+                    e
+                ))
+            })?;
+
+        let viewport_width = viewport_result
+            .value()
+            .and_then(|v| v.get("width"))
+            .and_then(|w| w.as_u64())
+            .unwrap_or(1920) as u32;
+
+        let viewport_height = viewport_result
+            .value()
+            .and_then(|v| v.get("height"))
+            .and_then(|h| h.as_u64())
+            .unwrap_or(1080) as u32;
+
         // Build screenshot params
         let screenshot_params = ScreenshotParams::builder()
             .format(format_enum.clone())
@@ -129,39 +152,35 @@ impl Tool for BrowserScreenshotTool {
 
         let mut contents = Vec::new();
 
-        // Terminal summary (truncate base64 preview)
-        let preview = if base64_image.len() > 50 {
-            format!("{}... ({} chars)", &base64_image[..50], base64_image.len())
-        } else {
-            base64_image.clone()
-        };
-
-        let target = if args.selector.is_some() {
-            "element"
+        // ========================================
+        // Content[0]: Human-Readable Summary
+        // ========================================
+        let target = if let Some(ref sel) = args.selector {
+            sel.as_str()
         } else {
             "full page"
         };
 
         let summary = format!(
-            "✓ Screenshot captured\n\n\
-             Format: {}\n\
-             Target: {}\n\
-             Size: {} bytes\n\
-             Data preview: {}",
-            format_str.to_uppercase(),
+            "\x1b[36m󰄀 Screenshot: {}\x1b[0m\n 󰈙 Format: {} · Size: {}x{}",
             target,
-            image_data.len(),
-            preview
+            format_str.to_uppercase(),
+            viewport_width,
+            viewport_height
         );
         contents.push(Content::text(summary));
 
-        // JSON metadata (full base64)
+        // ========================================
+        // Content[1]: Machine-Parseable JSON
+        // ========================================
         let metadata = json!({
             "success": true,
             "image": base64_image,
             "format": format_str,
             "size_bytes": image_data.len(),
             "selector": args.selector,
+            "viewport_width": viewport_width,
+            "viewport_height": viewport_height,
             "message": format!(
                 "Screenshot captured ({} bytes, {} format, {})",
                 image_data.len(),

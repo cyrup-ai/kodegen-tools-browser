@@ -152,32 +152,20 @@ impl Tool for BrowserGetResearchResultTool {
                     
                     let mut contents = Vec::new();
 
-                    // Terminal summary
-                    let summary_text = format!(
-                        "✓ Research completed\n\n\
-                         Query: {}\n\
-                         Session ID: {}\n\
-                         Pages visited: {}\n\
-                         Runtime: {}s\n\n\
-                         Key Findings:\n{}\n\n\
-                         Sources:\n{}",
-                        query,
+                    // Terminal summary - compact 2-line format with ANSI colors and Nerd Font icons
+                    let summary = format!(
+                        "\x1b[36m󰧞 Research Results: {}\x1b[0m",
+                        query
+                    );
+
+                    let metadata_line = format!(
+                        " 󰌋 Session: {} · Pages: {} · Sources: {}",
                         session_id,
                         pages_visited,
-                        runtime_seconds,
-                        key_findings.iter()
-                            .take(5)
-                            .enumerate()
-                            .map(|(i, f)| format!("  {}. {}", i + 1, f))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                        sources.iter()
-                            .take(5)
-                            .enumerate()
-                            .map(|(i, s)| format!("  {}. {}", i + 1, s))
-                            .collect::<Vec<_>>()
-                            .join("\n")
+                        sources.len()
                     );
+
+                    let summary_text = format!("{}\n{}", summary, metadata_line);
                     contents.push(Content::text(summary_text));
 
                     // JSON metadata

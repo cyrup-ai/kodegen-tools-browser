@@ -133,16 +133,12 @@ impl Tool for BrowserAgentTool {
         let mut contents = Vec::new();
 
         // Terminal summary
-        let status_icon = if is_complete { "✓" } else { "⚠" };
         let status_text = if is_complete { "Complete" } else { "Incomplete" };
-        
+
         let summary = format!(
-            "{} Browser agent execution\n\n\
-             Task: {}\n\
-             Status: {}\n\
-             Steps: {}/{}\n\n\
-             Result:\n{}",
-            status_icon, args.task, status_text, steps_taken, args.max_steps, final_result
+            "\x1b[35m󰤖 Browser Agent: {}\x1b[0m\n\
+             󰅺 Steps: {}/{} · Status: {}",
+            args.task, steps_taken, args.max_steps, status_text
         );
         contents.push(Content::text(summary));
 

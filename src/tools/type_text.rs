@@ -139,13 +139,11 @@ impl Tool for BrowserTypeTextTool {
 
         // Terminal summary
         let summary = format!(
-            "✓ Text entered\n\n\
-             Selector: {}\n\
-             Characters: {}\n\
-             Cleared first: {}",
+            "\x1b[33m\u{f11d} Type Text: {}\x1b[0m\n\
+             \u{f129} Element: {} · Characters: {}",
             args.selector,
-            args.text.len(),
-            args.clear
+            args.selector,
+            args.text.len()
         );
         contents.push(Content::text(summary));
 

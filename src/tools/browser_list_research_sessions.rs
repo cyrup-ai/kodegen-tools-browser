@@ -68,33 +68,22 @@ impl Tool for BrowserListResearchSessionsTool {
 
         let mut contents = Vec::new();
 
-        // Terminal summary
+        // Count sessions by status
+        let total = sessions.len();
+        let active_count = sessions.iter()
+            .filter(|s| s["status"].as_str() == Some("running"))
+            .count();
+        let completed_count = sessions.iter()
+            .filter(|s| s["status"].as_str() == Some("completed"))
+            .count();
+
+        // Terminal summary with ANSI colors and Nerd Font icons
         let summary = if sessions.is_empty() {
-            "No active research sessions".to_string()
+            "\x1b[36m Research Sessions\x1b[0m\n 󰓎 Total: 0 · No active sessions".to_string()
         } else {
-            let session_list: Vec<String> = sessions.iter()
-                .map(|s| {
-                    let session_id = s["session_id"].as_str().unwrap_or("unknown");
-                    let query = s["query"].as_str().unwrap_or("unknown");
-                    let status = s["status"].as_str().unwrap_or("unknown");
-                    let runtime = s["runtime_seconds"].as_u64().unwrap_or(0);
-                    
-                    format!(
-                        "  • {} - {} ({}, {}s)",
-                        &session_id[..8.min(session_id.len())],
-                        query,
-                        status,
-                        runtime
-                    )
-                })
-                .collect();
-            
             format!(
-                "✓ Research sessions\n\n\
-                 Total: {}\n\n\
-                 {}",
-                sessions.len(),
-                session_list.join("\n")
+                "\x1b[36m Research Sessions\x1b[0m\n 󰓎 Total: {} · Active: {} · Completed: {}",
+                total, active_count, completed_count
             )
         };
         contents.push(Content::text(summary));

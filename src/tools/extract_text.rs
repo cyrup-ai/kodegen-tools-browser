@@ -154,26 +154,28 @@ impl Tool for BrowserExtractTextTool {
         let mut contents = Vec::new();
 
         let source = if args.selector.is_some() { "element" } else { "full page" };
-        
-        // Terminal summary (truncate long text)
-        let text_preview = if text.len() > 200 {
-            format!("{}... ({} total chars)", &text[..200], text.len())
+
+        // ========================================
+        // Content[0]: Human-Readable Summary
+        // ========================================
+        let selector_display = args.selector.as_deref().unwrap_or("full page");
+        let preview = if text.chars().count() > 50 {
+            format!("{}...", text.chars().take(50).collect::<String>())
         } else {
             text.clone()
         };
 
         let summary = format!(
-            "✓ Text extracted\n\n\
-             Source: {}\n\
-             Characters: {}\n\n\
-             Preview:\n{}",
-            source,
+            "\x1b[36m󰈙 Extract Text: {}\x1b[0m\n 󰋗 Characters: {} · Preview: {}",
+            selector_display,
             text.len(),
-            text_preview
+            preview
         );
         contents.push(Content::text(summary));
 
-        // JSON metadata (full text)
+        // ========================================
+        // Content[1]: Machine-Parseable JSON
+        // ========================================
         let metadata = json!({
             "success": true,
             "text": text,

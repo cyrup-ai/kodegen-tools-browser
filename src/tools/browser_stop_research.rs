@@ -79,20 +79,16 @@ impl Tool for BrowserStopResearchTool {
 
         let mut contents = Vec::new();
 
-        // Terminal summary
+        // Terminal summary (2 lines)
         let pages_visited = session.progress.last().map(|p| p.pages_visited).unwrap_or(0);
         let runtime_seconds = session.runtime_seconds();
-        
+
         let summary = format!(
-            "⚠ Research cancelled\n\n\
-             Session ID: {}\n\
-             Query: {}\n\
-             Runtime: {}s\n\
-             Pages visited: {}",
+            "\x1b[31m Research Stopped: {}\x1b[0m\n\
+              Status: cancelled · Pages processed: {} · Runtime: {}s",
             session.session_id,
-            session.query,
-            runtime_seconds,
-            pages_visited
+            pages_visited,
+            runtime_seconds
         );
         contents.push(Content::text(summary));
 

@@ -165,21 +165,24 @@ impl Tool for BrowserNavigateTool {
         
         let mut contents = Vec::new();
 
-        // Terminal summary
-        let redirect_info = if redirected {
-            format!("\n  Redirected: {} → {}", requested_url, final_url)
+        // Terminal summary (KODEGEN pattern: 2-line colored format)
+        let summary = if redirected {
+            format!(
+                "\x1b[36m󰖟 Navigate: {}\x1b[0m\n\
+                  Redirected: {} → {} · Timeout: {}ms",
+                final_url,
+                requested_url,
+                final_url,
+                timeout_ms
+            )
         } else {
-            String::new()
+            format!(
+                "\x1b[36m󰖟 Navigate: {}\x1b[0m\n\
+                  Timeout: {}ms",
+                final_url,
+                timeout_ms
+            )
         };
-
-        let summary = format!(
-            "✓ Navigation complete\n\n\
-             URL: {}{}\n\
-             Timeout: {}ms",
-            final_url,
-            redirect_info,
-            timeout_ms
-        );
         contents.push(Content::text(summary));
 
         // JSON metadata (preserve all original fields)

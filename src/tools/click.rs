@@ -119,11 +119,10 @@ impl Tool for BrowserClickTool {
 
         // Terminal summary
         let summary = format!(
-            "✓ Element clicked\n\n\
-             Selector: {}\n\
-             Navigation: {}",
+            "\x1b[33m  Click: {}\x1b[0m\n \
+              Element: {} · Action: clicked",
             args.selector,
-            if args.wait_for_navigation.unwrap_or(false) { "waited" } else { "immediate" }
+            args.selector
         );
         contents.push(Content::text(summary));
 
