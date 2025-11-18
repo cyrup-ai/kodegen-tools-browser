@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 use tokio::task::{self, JoinHandle};
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::utils::constants::CHROME_USER_AGENT;
 
@@ -353,7 +353,23 @@ pub async fn launch_browser(
     let handler_task = task::spawn(async move {
         while let Some(h) = handler.next().await {
             if let Err(e) = h {
-                error!("Browser handler error: {:?}", e);
+                let error_msg = e.to_string();
+                
+                // Filter out known non-fatal CDP serialization errors
+                // These occur when Chrome sends CDP events that chromiumoxide doesn't recognize
+                // Reference: https://github.com/mattsse/chromiumoxide/issues/167
+                //            https://github.com/mattsse/chromiumoxide/issues/229
+                let is_benign_serialization_error = 
+                    error_msg.contains("data did not match any variant of untagged enum Message")
+                    || error_msg.contains("Failed to deserialize WS response");
+                
+                if !is_benign_serialization_error {
+                    // Log genuine errors that need attention
+                    error!("Browser handler error: {:?}", e);
+                } else {
+                    // Optionally log at trace level for deep debugging
+                    trace!("Suppressed benign CDP serialization error: {}", error_msg);
+                }
             }
         }
         info!("Browser handler task completed");

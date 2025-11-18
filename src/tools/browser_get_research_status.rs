@@ -64,11 +64,13 @@ impl Tool for BrowserGetResearchStatusTool {
     }
 
     async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+        let session_id = args.session_id;
+
         // Get global session manager
         let manager = ResearchSessionManager::global();
 
         // Get session
-        let session_ref = manager.get_session(&args.session_id).await.map_err(|e| {
+        let session_ref = manager.get_session(&session_id).await.map_err(|e| {
             McpError::invalid_arguments(format!(
                 "Session not found: {}. Use list_research_sessions to see active sessions.",
                 e
