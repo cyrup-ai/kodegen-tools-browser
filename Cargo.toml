@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_browser"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -34,13 +34,13 @@ crate-type = ["lib"]
 
 [dependencies]
 
-kodegen_mcp_schema = { version = "0.2" }
-kodegen_mcp_tool = { version = "0.2" }
-kodegen_server_http = { version = "0.2" }
-kodegen_config_manager = { version = "0.2" }
-kodegen_utils = { version = "0.2" }
-kodegen_candle_agent = { version = "0.2" }
-kodegen_mcp_client = { version = "0.2" }
+kodegen_mcp_schema = { version = "0.2", path = "../kodegen-mcp-schema" }
+kodegen_mcp_tool = { version = "0.2", path = "../kodegen-mcp-tool" }
+kodegen_server_http = { version = "0.2", path = "../kodegen-server-http" }
+kodegen_config_manager = { version = "0.2", path = "../kodegen-config-manager" }
+kodegen_utils = { version = "0.2", path = "../kodegen-utils" }
+kodegen_candle_agent = { version = "0.2", path = "../kodegen-candle-agent" }
+kodegen_mcp_client = { version = "0.2", path = "../kodegen-mcp-client" }
 cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
 
 rmcp = { version = "0.8", features = ["client", "schemars", "server", "transport-sse-server"] }
