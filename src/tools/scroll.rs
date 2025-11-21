@@ -2,7 +2,7 @@
 
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{CallArgument, CallFunctionOnParams};
 use kodegen_mcp_schema::browser::{BrowserScrollArgs, BrowserScrollPromptArgs, BROWSER_SCROLL};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
@@ -40,7 +40,7 @@ impl Tool for BrowserScrollTool {
         false // Scrolling changes viewport state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager

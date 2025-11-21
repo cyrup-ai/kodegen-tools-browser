@@ -4,7 +4,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chromiumoxide::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use kodegen_mcp_schema::browser::{BrowserScreenshotArgs, BrowserScreenshotPromptArgs, BROWSER_SCREENSHOT};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ impl Tool for BrowserScreenshotTool {
         true // Screenshots don't modify browser state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager

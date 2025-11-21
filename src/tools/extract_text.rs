@@ -1,7 +1,7 @@
 //! Browser extract text tool - gets page or element text content
 
 use kodegen_mcp_schema::browser::{BrowserExtractTextArgs, BrowserExtractTextPromptArgs, BROWSER_EXTRACT_TEXT};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ impl Tool for BrowserExtractTextTool {
         true // Extraction doesn't modify page
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Get or create browser instance
         let browser_arc = self
             .manager

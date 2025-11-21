@@ -1,7 +1,7 @@
 //! Browser type text tool - inputs text into form fields
 
 use kodegen_mcp_schema::browser::{BrowserTypeTextArgs, BrowserTypeTextPromptArgs, BROWSER_TYPE_TEXT};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ impl Tool for BrowserTypeTextTool {
         false // Typing changes page state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Validate selector
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));

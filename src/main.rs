@@ -20,17 +20,6 @@ impl ShutdownHook for BrowserManagerWrapper {
     }
 }
 
-// Wrapper to impl ShutdownHook for ResearchSessionManager singleton
-struct ResearchSessionManagerWrapper;
-
-impl ShutdownHook for ResearchSessionManagerWrapper {
-    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async move {
-            kodegen_tools_browser::research::ResearchSessionManager::global().shutdown().await
-        })
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     run_http_server("browser", |_config, _tracker| {
@@ -45,9 +34,6 @@ async fn main() -> Result<()> {
         // Initialize browser manager (global singleton)
         let browser_manager = kodegen_tools_browser::BrowserManager::global();
         managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
-
-        // Register research session manager for graceful cleanup task shutdown
-        managers.register(ResearchSessionManagerWrapper).await;
 
         // Register all browser tools
         use kodegen_tools_browser::*;
@@ -91,31 +77,11 @@ async fn main() -> Result<()> {
             BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
         );
 
-        // Async research session tools (5 tools)
+        // Long-running research tool (1 tool)
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            BrowserStartResearchTool::new(),
-        );
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            BrowserGetResearchStatusTool::new(),
-        );
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            BrowserGetResearchResultTool::new(),
-        );
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            BrowserStopResearchTool::new(),
-        );
-        (tool_router, prompt_router) = register_tool(
-            tool_router,
-            prompt_router,
-            BrowserListResearchSessionsTool::new(),
+            BrowserResearchTool::new(browser_manager.clone()),
         );
 
         // Web search tool (1 tool)

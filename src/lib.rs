@@ -9,7 +9,6 @@ pub mod kromekover;
 mod manager;
 pub mod page_enhancer;
 pub mod page_extractor;
-pub mod research;
 mod tools;
 mod utils;
 pub mod web_search;
@@ -142,9 +141,8 @@ pub use browser::{
 pub use manager::BrowserManager;
 pub use tools::{
     BrowserAgentTool, BrowserClickTool, BrowserExtractTextTool, BrowserNavigateTool,
-    BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTextTool,
-    BrowserGetResearchResultTool, BrowserGetResearchStatusTool, BrowserListResearchSessionsTool,
-    BrowserStartResearchTool, BrowserStopResearchTool, BrowserWebSearchTool,
+    BrowserResearchTool, BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTextTool,
+    BrowserWebSearchTool,
 };
 
 // Shutdown hook wrappers
@@ -155,16 +153,6 @@ impl kodegen_server_http::ShutdownHook for BrowserManagerWrapper {
         let manager = self.0.clone();
         Box::pin(async move {
             manager.shutdown().await
-        })
-    }
-}
-
-struct ResearchSessionManagerWrapper;
-
-impl kodegen_server_http::ShutdownHook for ResearchSessionManagerWrapper {
-    fn shutdown(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
-        Box::pin(async move {
-            crate::research::ResearchSessionManager::global().shutdown().await
         })
     }
 }
@@ -211,10 +199,7 @@ pub async fn start_server(
             let browser_manager = crate::BrowserManager::global();
             managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
 
-            // Register research session manager for shutdown
-            managers.register(ResearchSessionManagerWrapper).await;
-
-            // Register all 13 browser tools
+            // Register all 9 browser tools (was 13)
 
             // Core browser automation tools (6 tools)
             (tool_router, prompt_router) = register_tool(
@@ -255,31 +240,11 @@ pub async fn start_server(
                 crate::BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
             );
 
-            // Async research session tools (5 tools)
+            // Browser research tool (1 tool - replaces 5 polling tools)
             (tool_router, prompt_router) = register_tool(
                 tool_router,
                 prompt_router,
-                crate::BrowserStartResearchTool::new(),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserGetResearchStatusTool::new(),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserGetResearchResultTool::new(),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserStopResearchTool::new(),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserListResearchSessionsTool::new(),
+                crate::BrowserResearchTool::new(browser_manager.clone()),
             );
 
             // Web search tool (1 tool)

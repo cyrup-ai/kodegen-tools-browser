@@ -1,7 +1,7 @@
 //! Browser navigation tool - loads URLs and waits for page ready
 
 use kodegen_mcp_schema::browser::{BrowserNavigateArgs, BrowserNavigatePromptArgs, BROWSER_NAVIGATE};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -147,7 +147,7 @@ impl Tool for BrowserNavigateTool {
         true // Accesses external URLs
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Store args values before moving into navigate_and_capture_page
         let timeout_ms = args.timeout_ms.unwrap_or(30000);
         let requested_url = args.url.clone();

@@ -1,7 +1,7 @@
 //! Browser click tool - clicks elements by CSS selector
 
 use kodegen_mcp_schema::browser::{BrowserClickArgs, BrowserClickPromptArgs, BROWSER_CLICK};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ impl Tool for BrowserClickTool {
         false // Clicking changes page state
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Validate selector not empty
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));

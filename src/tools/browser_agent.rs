@@ -3,7 +3,7 @@ use crate::agent::prompts::{AgentMessagePrompt, SystemPrompt};
 use crate::manager::BrowserManager;
 use crate::utils::AgentState;
 use kodegen_mcp_schema::browser::{BrowserAgentArgs, BrowserAgentPromptArgs, BROWSER_AGENT, BROWSER_NAVIGATE};
-use kodegen_mcp_tool::{Tool, error::McpError};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
 use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -47,7 +47,7 @@ impl Tool for BrowserAgentTool {
         true // Agent can navigate to any URL
     }
 
-    async fn execute(&self, args: Self::Args) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
         // Create loopback MCP client (connects to same server)
         // By the time this tool executes, the server is fully running
         let (mcp_client, _connection) = kodegen_mcp_client::create_streamable_client(&self.server_url)
