@@ -189,23 +189,86 @@ impl Tool for BrowserScrollTool {
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![]
+        vec![PromptArgument {
+            name: "scenario".to_string(),
+            title: None,
+            description: Some(
+                "Optional use case scenario: 'pixel' (scroll by x/y amounts), \
+                 'selector' (scroll to element), or 'both' (comprehensive overview)"
+                    .to_string(),
+            ),
+            required: Some(false),
+        }]
     }
 
     async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
         Ok(vec![
             PromptMessage {
                 role: PromptMessageRole::User,
-                content: PromptMessageContent::text("How do I scroll a page?"),
+                content: PromptMessageContent::text(
+                    "How do I use browser_scroll to navigate pages effectively?",
+                ),
             },
             PromptMessage {
                 role: PromptMessageRole::Assistant,
                 content: PromptMessageContent::text(
-                    "Use browser_scroll to scroll the page. Examples:\\n\
-                     - browser_scroll({\"y\": 500}) - Scroll down 500px\\n\
-                     - browser_scroll({\"y\": -300}) - Scroll up 300px\\n\
-                     - browser_scroll({\"x\": 200, \"y\": 400}) - Scroll right and down\\n\
-                     - browser_scroll({\"selector\": \"#footer\"}) - Scroll to element",
+                    "The browser_scroll tool supports two complementary scrolling approaches:\n\n\
+                     **Mode 1: Scroll by Pixel Amounts**\n\
+                     For precise, distance-based scrolling:\n\
+                     ```json\n\
+                     browser_scroll({\"y\": 500})              // Scroll down 500px\n\
+                     browser_scroll({\"y\": -300})             // Scroll up 300px\n\
+                     browser_scroll({\"x\": 200, \"y\": 400})  // Scroll right+down\n\
+                     ```\n\n\
+                     Pixel amounts are automatically clamped to ±10,000px for safety.\n\n\
+                     **Mode 2: Scroll to Element**\n\
+                     For semantic, target-based scrolling:\n\
+                     ```json\n\
+                     browser_scroll({\"selector\": \"#footer\"})           // Scroll to element by ID\n\
+                     browser_scroll({\"selector\": \".pricing-table\"})   // Scroll to class\n\
+                     browser_scroll({\"selector\": \"[data-section='contact']\"})\n\
+                     ```\n\n\
+                     **When to Use Each Mode:**\n\
+                     - Use pixel scrolling for: pagination, viewport repositioning, smooth continuous movement\n\
+                     - Use selector scrolling for: accessing specific UI components, form fields, content sections\n\n\
+                     **Important Considerations:**\n\
+                     1. Call browser_navigate() first - the page must be loaded before scrolling\n\
+                     2. Selector mode validates element existence before scrolling (fails if not found)\n\
+                     3. Pixel mode may fail if page doesn't support scrolling (e.g., overflow:hidden on body)\n\
+                     4. Use scroll_into_view() behavior - respects CSS scroll-behavior properties\n\
+                     5. Iframes are NOT supported - can only scroll main document\n\n\
+                     **Common Patterns:**\n\
+                     - Multiple scrolls: Combine with screenshot() between scrolls to inspect content\n\
+                     - Scrolling to footer: browser_scroll({\"selector\": \"footer\"})\n\
+                     - Exhaustive reading: Scroll down in 500px increments with extract_text() at each step\n\
+                     - Smart targeting: Use data-* attributes for reliable selectors across DOM changes",
+                ),
+            },
+            PromptMessage {
+                role: PromptMessageRole::User,
+                content: PromptMessageContent::text(
+                    "What happens if my selector doesn't exist or scrolling fails?",
+                ),
+            },
+            PromptMessage {
+                role: PromptMessageRole::Assistant,
+                content: PromptMessageContent::text(
+                    "Error handling and recovery:\n\n\
+                     **Selector Mode Errors:**\n\
+                     - If element not found: Tool returns detailed error with CSS selector syntax hints\n\
+                     - Verify: (1) CSS selector is valid, (2) element exists on current page, (3) element is not in iframe\n\
+                     - Recovery: Use extract_text() or screenshot() to inspect page, find correct selector\n\n\
+                     **Pixel Mode Errors:**\n\
+                     - If scroll fails: Page may not support scrolling (check CSS overflow properties)\n\
+                     - Element may be detached from DOM if page modified\n\
+                     - JavaScript execution was blocked (rare)\n\
+                     - Recovery: Call browser_navigate() to reload, verify page is stable before scrolling\n\n\
+                     **Best Practices:**\n\
+                     - Always check page state with screenshot() before and after scrolling\n\
+                     - For selector scrolling, prefer unique IDs or semantic data-* attributes\n\
+                     - For pixel scrolling, start with small amounts (100-300px) then adjust\n\
+                     - Test selectors with extract_text(selector) before scroll operations\n\
+                     - Chain operations: navigate → screenshot → scroll → screenshot to verify position",
                 ),
             },
         ])

@@ -121,7 +121,35 @@ impl Tool for BrowserWebSearchTool {
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![]
+        vec![
+            PromptArgument {
+                name: "query_type".to_string(),
+                title: None,
+                description: Some(
+                    "Type of search queries to focus examples on (e.g., 'technical', 'documentation', 'code examples', 'general')"
+                        .to_string(),
+                ),
+                required: Some(false),
+            },
+            PromptArgument {
+                name: "focus_area".to_string(),
+                title: None,
+                description: Some(
+                    "Domain or technology to focus examples on (e.g., 'Rust', 'Python', 'security', 'web development')"
+                        .to_string(),
+                ),
+                required: Some(false),
+            },
+            PromptArgument {
+                name: "depth".to_string(),
+                title: None,
+                description: Some(
+                    "Complexity level for the teaching prompt (e.g., 'basic', 'intermediate', 'advanced')"
+                        .to_string(),
+                ),
+                required: Some(false),
+            },
+        ]
     }
 
     async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
