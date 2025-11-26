@@ -3,7 +3,11 @@
 //! This module spawns the local kodegen-browser HTTP server and connects to it.
 
 use anyhow::{Context, Result};
-use kodegen_mcp_client::{KodegenClient, KodegenConnection, create_streamable_client};
+use http::header::{HeaderMap, HeaderValue};
+use kodegen_mcp_client::{
+    KodegenClient, KodegenConnection, X_KODEGEN_CONNECTION_ID, X_KODEGEN_GITROOT, X_KODEGEN_PWD,
+    create_streamable_client,
+};
 use rmcp::model::CallToolResult;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex as StdMutex, OnceLock};
@@ -11,6 +15,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Browser HTTP server configuration
 const HTTP_PORT: u16 = 30438;
@@ -65,6 +70,19 @@ pub fn find_workspace_root() -> Result<&'static PathBuf> {
     WORKSPACE_ROOT
         .get()
         .ok_or_else(|| anyhow::anyhow!("Failed to retrieve cached workspace root"))
+}
+
+/// Find git repository root by walking up from start directory
+fn find_git_root(start: &Path) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    loop {
+        if current.join(".git").exists() {
+            return Some(current);
+        }
+        if !current.pop() {
+            return None;
+        }
+    }
 }
 
 /// Server process handle
@@ -163,10 +181,35 @@ pub async fn connect_with_retry(
     let mut attempt = 0;
     let mut last_progress_log = start;
 
+    // Build session headers
+    let mut headers = HeaderMap::new();
+
+    // Connection ID - unique per example run
+    let connection_id = Uuid::new_v4().to_string();
+    headers.insert(
+        X_KODEGEN_CONNECTION_ID,
+        HeaderValue::from_str(&connection_id).context("Failed to convert connection ID to header value")?,
+    );
+
+    // Current working directory
+    let cwd = std::env::current_dir().context("Failed to get current directory")?;
+    headers.insert(
+        X_KODEGEN_PWD,
+        HeaderValue::from_str(&cwd.to_string_lossy()).context("Failed to convert PWD to header value")?,
+    );
+
+    // Git root if available
+    if let Some(git_root) = find_git_root(&cwd) {
+        headers.insert(
+            X_KODEGEN_GITROOT,
+            HeaderValue::from_str(&git_root.to_string_lossy()).context("Failed to convert git root to header value")?,
+        );
+    }
+
     loop {
         attempt += 1;
 
-        match create_streamable_client(url).await {
+        match create_streamable_client(url, headers.clone()).await {
             Ok(result) => {
                 eprintln!(
                     "✅ Connected to HTTP server in {:?} (attempt {})",

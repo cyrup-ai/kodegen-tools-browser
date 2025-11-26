@@ -75,7 +75,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 
 # Utilities
 dirs = "6"
@@ -107,6 +107,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 cyrup_termcolor = "2"
 chrono = { version = "0.4", features = ["serde"] }
+http = "1"
 
 [[bin]]
 name = "kodegen-browser"
