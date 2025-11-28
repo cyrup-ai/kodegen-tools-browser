@@ -1,11 +1,15 @@
 mod core;
 pub mod prompts;
+pub mod registry;
+pub mod session;
 mod views;
 
 use serde::{Deserialize, Serialize};
 
 pub use core::{Agent, AgentConfig, PromptConfig};
 pub use prompts::{AgentMessagePrompt, SystemPrompt};
+pub use registry::AgentRegistry;
+pub use session::AgentSession;
 pub use views::{ActionView, BrowserStateView, HistoryView, StepView};
 
 use thiserror::Error;

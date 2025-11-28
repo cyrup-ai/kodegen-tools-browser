@@ -5,6 +5,7 @@
 pub mod agent;
 mod browser;
 pub mod browser_setup;
+pub mod research;
 pub mod kromekover;
 mod manager;
 pub mod page_enhancer;
