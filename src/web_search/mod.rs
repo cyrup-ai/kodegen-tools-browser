@@ -93,6 +93,12 @@ pub async fn search_with_manager(
         "Search completed successfully with {} results",
         results.len()
     );
+    
+    // Close page before returning to prevent memory leak
+    if let Err(e) = page.close().await {
+        tracing::warn!("Failed to close search page: {}", e);
+    }
+    
     Ok(SearchResults::new(query, results))
 }
 

@@ -104,10 +104,11 @@ impl BrowserResearchTool {
         }
     }
     
-    async fn get_registry(&self) -> &ResearchRegistry {
+    pub async fn get_registry(&self) -> ResearchRegistry {
         self.registry
             .get_or_init(|| async { ResearchRegistry::new() })
             .await
+            .clone()
     }
 }
 
@@ -272,6 +273,22 @@ impl Tool for BrowserResearchTool {
                 
                 // Read current state
                 let session_output = session.read(args.session).await;
+                
+                // Opportunistic cleanup if session completed
+                if session_output.completed {
+                    let registry_clone = registry.clone();
+                    let conn_id = connection_id.to_string();
+                    tokio::spawn(async move {
+                        let cleaned = registry_clone.cleanup_completed(&conn_id).await;
+                        if cleaned > 0 {
+                            tracing::info!(
+                                "Cleaned up {} completed session(s) for connection {}", 
+                                cleaned, 
+                                conn_id
+                            );
+                        }
+                    });
+                }
                 
                 // Convert to output format
                 let results: Vec<ResearchResultOutput> = session_output

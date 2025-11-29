@@ -52,8 +52,13 @@ impl BrowserNavigateTool {
         // Prevents non-deterministic page selection in get_current_page()
         if let Ok(existing_pages) = wrapper.browser().pages().await {
             for page in existing_pages {
-                // Ignore errors - pages might already be closed or unresponsive
-                let _ = page.close().await;
+                // Log errors but continue - pages might already be closed or unresponsive
+                if let Err(e) = page.close().await {
+                    tracing::warn!(
+                        "Failed to close page during cleanup (may already be closed): {}",
+                        e
+                    );
+                }
             }
         }
 

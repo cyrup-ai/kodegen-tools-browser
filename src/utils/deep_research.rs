@@ -300,14 +300,22 @@ impl DeepResearch {
         // 4. GENERATE SUMMARY WITH CANDLEFLUENTAI
         let summary = self.summarize_content(&title, &content).await?;
 
-        Ok(ResearchResult {
-            url: final_url,
+        // 5. CREATE RESULT BEFORE CLOSING PAGE
+        let result = ResearchResult {
+            url: final_url.clone(),
             title,
             content,
             summary,
             timestamp: chrono::Utc::now(),
             metadata: page_info.metadata,
-        })
+        };
+
+        // 6. CLOSE PAGE TO PREVENT MEMORY LEAK (critical for parallel execution)
+        if let Err(e) = page.close().await {
+            warn!("Failed to close page for {}: {}", final_url, e);
+        }
+
+        Ok(result)
     }
 
     /// Summarize content using CandleFluentAi streaming

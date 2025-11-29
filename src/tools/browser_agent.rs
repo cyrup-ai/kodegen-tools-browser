@@ -86,10 +86,11 @@ impl BrowserAgentTool {
         }
     }
     
-    async fn get_registry(&self) -> &AgentRegistry {
+    pub async fn get_registry(&self) -> AgentRegistry {
         self.registry
             .get_or_init(|| async { AgentRegistry::new() })
             .await
+            .clone()
     }
 }
 

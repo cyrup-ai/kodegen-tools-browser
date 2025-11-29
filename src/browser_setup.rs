@@ -208,17 +208,17 @@ fn expand_windows_env_vars(path: &str) -> String {
 pub async fn download_managed_browser() -> Result<PathBuf> {
     info!("Downloading managed Chromium browser...");
 
-    // Create cache directory for downloaded browser
-    let cache_dir = dirs::cache_dir()
-        .unwrap_or_else(|| {
-            let fallback = std::env::temp_dir().join(".cache");
+    // Create data directory for downloaded browser
+    let cache_dir = kodegen_config::KodegenConfig::data_dir()
+        .unwrap_or_else(|_| {
+            let fallback = std::env::temp_dir().join(".kodegen");
             warn!(
-                "Could not determine system cache directory, using temp directory fallback: {}",
+                "Could not determine kodegen data directory, using temp directory fallback: {}",
                 fallback.display()
             );
             fallback
         })
-        .join("enigo/chromium");
+        .join("chromium");
 
     std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 

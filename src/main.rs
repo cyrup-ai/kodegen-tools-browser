@@ -4,9 +4,11 @@
 // Managed by kodegend daemon, typically running on port 30440.
 
 use anyhow::Result;
-use kodegen_server_http::{run_http_server, Managers, RouterSet, ShutdownHook, register_tool};
+use kodegen_server_http::{run_http_server, Managers, RouterSet, ShutdownHook, register_tool, ConnectionCleanupFn};
 use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
 use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
 
 // Wrapper to impl ShutdownHook for Arc<BrowserManager>
 struct BrowserManagerWrapper(Arc<kodegen_tools_browser::BrowserManager>);
@@ -71,17 +73,21 @@ async fn main() -> Result<()> {
         );
 
         // Advanced browser tools (1 tool)
+        let browser_agent_tool = BrowserAgentTool::new(browser_manager.clone(), server_url.clone());
+        let agent_registry = browser_agent_tool.get_registry().await;
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
+            browser_agent_tool,
         );
 
         // Long-running research tool (1 tool)
+        let browser_research_tool = BrowserResearchTool::new(browser_manager.clone());
+        let research_registry = browser_research_tool.get_registry().await;
         (tool_router, prompt_router) = register_tool(
             tool_router,
             prompt_router,
-            BrowserResearchTool::new(browser_manager.clone()),
+            browser_research_tool,
         );
 
         // Web search tool (1 tool)
@@ -91,7 +97,25 @@ async fn main() -> Result<()> {
             BrowserWebSearchTool::new(),
         );
 
-        Ok(RouterSet::new(tool_router, prompt_router, managers))
+        // Create cleanup callback for connection dropped notification
+        let cleanup: ConnectionCleanupFn = Arc::new(move |connection_id: String| {
+            let agent_reg = agent_registry.clone();
+            let research_reg = research_registry.clone();
+            Box::pin(async move {
+                let agent_cleaned = agent_reg.cleanup_connection(&connection_id).await;
+                let research_cleaned = research_reg.cleanup_connection(&connection_id).await;
+                log::info!(
+                    "Connection {}: cleaned up {} browser agent(s), {} research session(s)",
+                    connection_id,
+                    agent_cleaned,
+                    research_cleaned
+                );
+            }) as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+        });
+
+        let mut router_set = RouterSet::new(tool_router, prompt_router, managers);
+        router_set.connection_cleanup = Some(cleanup);
+        Ok(router_set)
         })
     })
     .await

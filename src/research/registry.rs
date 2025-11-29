@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 type RegistryKey = (String, u32);
 
 /// Registry for managing multiple research sessions
+#[derive(Clone)]
 pub struct ResearchRegistry {
     sessions: Arc<Mutex<HashMap<RegistryKey, Arc<ResearchSession>>>>,
 }
@@ -142,6 +143,37 @@ impl ResearchRegistry {
             sessions.remove(&key);
         }
         
+        count
+    }
+
+    /// Cleanup all research sessions for a connection
+    ///
+    /// Called when a connection drops to cleanup all associated research sessions.
+    /// Returns the number of sessions cleaned up.
+    pub async fn cleanup_connection(&self, connection_id: &str) -> usize {
+        let mut sessions = self.sessions.lock().await;
+
+        // Collect session IDs to remove
+        let to_remove: Vec<RegistryKey> = sessions
+            .keys()
+            .filter(|(conn_id, _)| conn_id == connection_id)
+            .cloned()
+            .collect();
+
+        let count = to_remove.len();
+
+        // Remove and drop each session
+        for key in to_remove {
+            if let Some(session) = sessions.remove(&key) {
+                log::debug!(
+                    "Cleaning up research session {} for connection {}",
+                    key.1,
+                    connection_id
+                );
+                drop(session);
+            }
+        }
+
         count
     }
 }
