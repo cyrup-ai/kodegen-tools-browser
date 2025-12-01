@@ -54,27 +54,31 @@ impl ResearchRegistry {
         }
     }
     
-    /// Find or create a research session
-    pub async fn find_or_create(
+    /// Create a new research session, replacing any existing one with same ID
+    ///
+    /// RESEARCH action always starts fresh research. If a session already exists
+    /// with the same ID, it is killed and replaced.
+    pub async fn create(
         &self,
         connection_id: &str,
         session_id: u32,
         research: DeepResearch,
         query: String,
         options: Option<ResearchOptions>,
-    ) -> Result<Arc<ResearchSession>> {
+    ) -> Arc<ResearchSession> {
         let key = (connection_id.to_string(), session_id);
         let mut sessions = self.sessions.lock().await;
-        
-        if let Some(session) = sessions.get(&key) {
-            return Ok(session.clone());
+
+        // Kill existing session if present
+        if let Some(old) = sessions.remove(&key) {
+            let _ = old.kill().await;
         }
-        
+
         // Create new session
         let session = Arc::new(ResearchSession::new(research, query, options));
         sessions.insert(key, session.clone());
-        
-        Ok(session)
+
+        session
     }
     
     /// Get an existing session

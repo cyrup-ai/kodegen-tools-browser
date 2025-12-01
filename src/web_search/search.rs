@@ -53,9 +53,49 @@ pub async fn perform_search(page: &Page, query: &str) -> Result<()> {
         .append_pair("ia", "web");
 
     info!("Navigating to DuckDuckGo search: {}", search_url);
-    page.goto(search_url.as_str())
-        .await
-        .context("Failed to navigate to DuckDuckGo")?;
+
+    // Add explicit 60-second timeout and detailed error handling
+    match tokio::time::timeout(
+        Duration::from_secs(60), // Increased from default 30s
+        page.goto(search_url.as_str())
+    )
+    .await
+    {
+        Ok(Ok(_)) => {
+            info!("Successfully navigated to DuckDuckGo");
+        }
+        Ok(Err(e)) => {
+            // Navigation failed - diagnose cause
+            let error_msg = e.to_string();
+            
+            if error_msg.contains("net::ERR_NAME_NOT_RESOLVED") {
+                return Err(anyhow!(
+                    "DNS resolution failed for DuckDuckGo. Check internet connection and DNS settings."
+                ));
+            } else if error_msg.contains("net::ERR_CONNECTION_REFUSED") {
+                return Err(anyhow!(
+                    "Connection refused by DuckDuckGo. Possible firewall or network issue."
+                ));
+            } else if error_msg.contains("net::ERR_TIMED_OUT") {
+                return Err(anyhow!(
+                    "Network timeout connecting to DuckDuckGo. Check internet speed and try again."
+                ));
+            } else {
+                return Err(anyhow!(
+                    "Failed to navigate to DuckDuckGo: {}. \
+                     This may indicate bot detection or DuckDuckGo service issues. \
+                     Try again in a few minutes.", 
+                    error_msg
+                ));
+            }
+        }
+        Err(_) => {
+            return Err(anyhow!(
+                "Navigation to DuckDuckGo timed out after 60 seconds. \
+                 Check network connectivity with: curl -I https://duckduckgo.com"
+            ));
+        }
+    }
 
     // DuckDuckGo uses React for rendering - wait for initial load
     page.wait_for_navigation()

@@ -157,8 +157,8 @@ impl Tool for BrowserNavigateTool {
         let timeout_ms = args.timeout_ms.unwrap_or(30000);
         let requested_url = args.url.clone();
         
-        // Delegate to internal method and discard Page handle
-        let (_page, result) = self.navigate_and_capture_page(args).await?;
+        // Capture page handle to ensure cleanup (CRITICAL: don't use _page)
+        let (page, result) = self.navigate_and_capture_page(args).await?;
         
         // Extract data from result JSON
         let final_url = result.get("url")
@@ -202,6 +202,11 @@ impl Tool for BrowserNavigateTool {
         let json_str = serde_json::to_string_pretty(&metadata)
             .unwrap_or_else(|_| "{}".to_string());
         contents.push(Content::text(json_str));
+
+        // CRITICAL FIX: Close page before returning to prevent memory leak
+        if let Err(e) = page.close().await {
+            tracing::warn!("Failed to close navigation page: {}", e);
+        }
 
         Ok(contents)
     }

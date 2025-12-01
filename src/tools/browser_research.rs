@@ -183,11 +183,10 @@ impl Tool for BrowserResearchTool {
                     args.max_tokens,
                 );
                 
-                // Find or create session
+                // Create new session (always fresh for RESEARCH action)
                 let session = registry
-                    .find_or_create(connection_id, args.session, research, query.clone(), options)
-                    .await
-                    .map_err(McpError::Other)?;
+                    .create(connection_id, args.session, research, query.clone(), options)
+                    .await;
                 
                 // Start research in background
                 session.start().await.map_err(McpError::Other)?;
