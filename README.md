@@ -23,7 +23,7 @@ kodegen-tools-browser is a high-performance Model Context Protocol (MCP) server 
 
 ## Installation
 
-### Prerequisites
+### Prerequisites 
 
 - Rust nightly toolchain
 - Google Chrome (auto-downloaded if not found)
