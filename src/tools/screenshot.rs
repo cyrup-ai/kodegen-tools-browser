@@ -3,10 +3,11 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chromiumoxide::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
-use kodegen_mcp_schema::browser::{BrowserScreenshotArgs, BrowserScreenshotPromptArgs, BROWSER_SCREENSHOT};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use kodegen_mcp_schema::browser::{
+    BrowserScreenshotArgs, BrowserScreenshotOutput, BrowserScreenshotPromptArgs, BROWSER_SCREENSHOT,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -41,7 +42,7 @@ impl Tool for BrowserScreenshotTool {
         true // Screenshots don't modify browser state
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserScreenshotOutput>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager
@@ -149,12 +150,9 @@ impl Tool for BrowserScreenshotTool {
 
         // Encode as base64
         let base64_image = BASE64.encode(&image_data);
+        let _size_bytes = image_data.len();
 
-        let mut contents = Vec::new();
-
-        // ========================================
-        // Content[0]: Human-Readable Summary
-        // ========================================
+        // Terminal summary
         let target = if let Some(ref sel) = args.selector {
             sel.as_str()
         } else {
@@ -168,31 +166,18 @@ impl Tool for BrowserScreenshotTool {
             viewport_width,
             viewport_height
         );
-        contents.push(Content::text(summary));
 
-        // ========================================
-        // Content[1]: Machine-Parseable JSON
-        // ========================================
-        let metadata = json!({
-            "success": true,
-            "image": base64_image,
-            "format": format_str,
-            "size_bytes": image_data.len(),
-            "selector": args.selector,
-            "viewport_width": viewport_width,
-            "viewport_height": viewport_height,
-            "message": format!(
-                "Screenshot captured ({} bytes, {} format, {})",
-                image_data.len(),
-                format_str.to_uppercase(),
-                target
-            )
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Build typed output
+        let output = BrowserScreenshotOutput {
+            success: true,
+            path: None,
+            width: viewport_width,
+            height: viewport_height,
+            format: format_str.to_string(),
+            base64: Some(base64_image),
+        };
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

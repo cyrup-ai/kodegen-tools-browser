@@ -1,9 +1,10 @@
 //! Browser click tool - clicks elements by CSS selector
 
-use kodegen_mcp_schema::browser::{BrowserClickArgs, BrowserClickPromptArgs, BROWSER_CLICK};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use kodegen_mcp_schema::browser::{
+    BrowserClickArgs, BrowserClickOutput, BrowserClickPromptArgs, BROWSER_CLICK,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +40,7 @@ impl Tool for BrowserClickTool {
         false // Clicking changes page state
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserClickOutput>, McpError> {
         // Validate selector not empty
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));
@@ -115,8 +116,6 @@ impl Tool for BrowserClickTool {
             })?;
         }
 
-        let mut contents = Vec::new();
-
         // Terminal summary
         let summary = format!(
             "\x1b[33m  Click: {}\x1b[0m\n \
@@ -124,20 +123,15 @@ impl Tool for BrowserClickTool {
             args.selector,
             args.selector
         );
-        contents.push(Content::text(summary));
 
-        // JSON metadata
-        let metadata = json!({
-            "success": true,
-            "selector": args.selector,
-            "navigation_waited": args.wait_for_navigation.unwrap_or(false),
-            "message": format!("Clicked element: {}", args.selector)
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Build typed output
+        let output = BrowserClickOutput {
+            success: true,
+            selector: args.selector,
+            message: "Element clicked successfully".to_string(),
+        };
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

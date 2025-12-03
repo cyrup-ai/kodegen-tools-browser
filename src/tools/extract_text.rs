@@ -1,9 +1,10 @@
 //! Browser extract text tool - gets page or element text content
 
-use kodegen_mcp_schema::browser::{BrowserExtractTextArgs, BrowserExtractTextPromptArgs, BROWSER_EXTRACT_TEXT};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use kodegen_mcp_schema::browser::{
+    BrowserExtractTextArgs, BrowserExtractTextOutput, BrowserExtractTextPromptArgs, BROWSER_EXTRACT_TEXT,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +40,7 @@ impl Tool for BrowserExtractTextTool {
         true // Extraction doesn't modify page
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserExtractTextOutput>, McpError> {
         // Get or create browser instance
         let browser_arc = self
             .manager
@@ -151,14 +152,10 @@ impl Tool for BrowserExtractTextTool {
             }
         };
 
-        let mut contents = Vec::new();
-
-        let source = if args.selector.is_some() { "element" } else { "full page" };
-
-        // ========================================
-        // Content[0]: Human-Readable Summary
-        // ========================================
+        let text_len = text.len();
         let selector_display = args.selector.as_deref().unwrap_or("full page");
+
+        // Terminal summary
         let preview = if text.chars().count() > 50 {
             format!("{}...", text.chars().take(50).collect::<String>())
         } else {
@@ -168,31 +165,18 @@ impl Tool for BrowserExtractTextTool {
         let summary = format!(
             "\x1b[36m󰈙 Extract Text: {}\x1b[0m\n 󰋗 Characters: {} · Preview: {}",
             selector_display,
-            text.len(),
+            text_len,
             preview
         );
-        contents.push(Content::text(summary));
 
-        // ========================================
-        // Content[1]: Machine-Parseable JSON
-        // ========================================
-        let metadata = json!({
-            "success": true,
-            "text": text,
-            "length": text.len(),
-            "selector": args.selector,
-            "source": source,
-            "message": format!(
-                "Extracted {} characters from {}",
-                text.len(),
-                args.selector.as_ref().unwrap_or(&"full page".to_string())
-            )
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Build typed output
+        let output = BrowserExtractTextOutput {
+            success: true,
+            text,
+            length: text_len,
+        };
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

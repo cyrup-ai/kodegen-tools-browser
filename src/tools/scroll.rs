@@ -1,9 +1,11 @@
 //! Browser scroll tool - scrolls page or to specific element
 
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{CallArgument, CallFunctionOnParams};
-use kodegen_mcp_schema::browser::{BrowserScrollArgs, BrowserScrollPromptArgs, BROWSER_SCROLL};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::browser::{
+    BrowserScrollArgs, BrowserScrollOutput, BrowserScrollPromptArgs, BROWSER_SCROLL,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
 use tracing::warn;
@@ -40,7 +42,7 @@ impl Tool for BrowserScrollTool {
         false // Scrolling changes viewport state
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserScrollOutput>, McpError> {
         // Get browser instance
         let browser_arc = self
             .manager
@@ -92,28 +94,22 @@ impl Tool for BrowserScrollTool {
                 ))
             })?;
 
-            let mut contents = Vec::new();
-
             // Terminal summary
             let summary = format!(
                 "\x1b[33m ↻ Scroll: to element\x1b[0m\n\
                   Selector: {} · Action: scroll_to_element",
                 selector
             );
-            contents.push(Content::text(summary));
 
-            // JSON metadata
-            let metadata = json!({
-                "success": true,
-                "action": "scroll_to_element",
-                "selector": selector,
-                "message": format!("Scrolled to element: {}", selector)
-            });
-            let json_str = serde_json::to_string_pretty(&metadata)
-                .unwrap_or_else(|_| "{}".to_string());
-            contents.push(Content::text(json_str));
+            // Build typed output
+            let output = BrowserScrollOutput {
+                success: true,
+                direction: "to_element".to_string(),
+                amount: 0,
+                message: format!("Scrolled to element: {}", selector),
+            };
 
-            Ok(contents)
+            Ok(ToolResponse::new(summary, output))
         } else {
             // Scroll by amount
             // Validate scroll amounts (defense-in-depth)
@@ -147,8 +143,6 @@ impl Tool for BrowserScrollTool {
                 ))
             })?;
 
-            let mut contents = Vec::new();
-
             // Compute direction from x/y values
             let direction = match (x, y) {
                 (0, 0) => "none",
@@ -170,21 +164,16 @@ impl Tool for BrowserScrollTool {
                   Direction: {} · Distance: {}px",
                 direction, direction, total_distance
             );
-            contents.push(Content::text(summary));
 
-            // JSON metadata
-            let metadata = json!({
-                "success": true,
-                "action": "scroll_by_amount",
-                "x": x,
-                "y": y,
-                "message": format!("Scrolled by x={}, y={}", x, y)
-            });
-            let json_str = serde_json::to_string_pretty(&metadata)
-                .unwrap_or_else(|_| "{}".to_string());
-            contents.push(Content::text(json_str));
+            // Build typed output
+            let output = BrowserScrollOutput {
+                success: true,
+                direction: direction.to_string(),
+                amount: total_distance,
+                message: format!("Scrolled by x={}, y={}", x, y),
+            };
 
-            Ok(contents)
+            Ok(ToolResponse::new(summary, output))
         }
     }
 

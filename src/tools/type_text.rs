@@ -1,9 +1,10 @@
 //! Browser type text tool - inputs text into form fields
 
-use kodegen_mcp_schema::browser::{BrowserTypeTextArgs, BrowserTypeTextPromptArgs, BROWSER_TYPE_TEXT};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use kodegen_mcp_schema::browser::{
+    BrowserTypeTextArgs, BrowserTypeOutput, BrowserTypeTextPromptArgs, BROWSER_TYPE_TEXT,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -39,7 +40,7 @@ impl Tool for BrowserTypeTextTool {
         false // Typing changes page state
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserTypeOutput>, McpError> {
         // Validate selector
         if args.selector.trim().is_empty() {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));
@@ -135,7 +136,7 @@ impl Tool for BrowserTypeTextTool {
             ))
         })?;
 
-        let mut contents = Vec::new();
+        let text_len = args.text.len();
 
         // Terminal summary
         let summary = format!(
@@ -143,28 +144,18 @@ impl Tool for BrowserTypeTextTool {
              \u{f129} Element: {} · Characters: {}",
             args.selector,
             args.selector,
-            args.text.len()
+            text_len
         );
-        contents.push(Content::text(summary));
 
-        // JSON metadata
-        let metadata = json!({
-            "success": true,
-            "selector": args.selector,
-            "text_length": args.text.len(),
-            "cleared": args.clear,
-            "message": format!(
-                "Typed {} characters into: {}{}",
-                args.text.len(),
-                args.selector,
-                if args.clear { " (cleared first)" } else { "" }
-            )
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Build typed output
+        let output = BrowserTypeOutput {
+            success: true,
+            selector: args.selector,
+            text_length: text_len,
+            message: format!("Typed {} characters", text_len),
+        };
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

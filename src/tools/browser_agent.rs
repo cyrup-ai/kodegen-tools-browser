@@ -10,61 +10,15 @@ use crate::agent::registry::AgentRegistry;
 use crate::manager::BrowserManager;
 use crate::utils::AgentState;
 use kodegen_mcp_schema::browser::{
-    BrowserAgentAction, BrowserAgentArgs, BrowserAgentPromptArgs, BROWSER_AGENT, BROWSER_NAVIGATE,
+    BrowserAgentAction, BrowserAgentArgs, BrowserAgentOutput, BrowserAgentPromptArgs,
+    BrowserAgentStepInfo, BROWSER_AGENT, BROWSER_NAVIGATE,
 };
-use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde::Serialize;
+use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext, ToolResponse};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, OnceCell};
-
-// =============================================================================
-// OUTPUT SCHEMAS
-// =============================================================================
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BrowserAgentOutput {
-    /// Agent number
-    pub agent: u32,
-    
-    /// Task being executed
-    pub task: String,
-    
-    /// Current step count
-    pub steps_taken: usize,
-    
-    /// Whether agent is complete
-    pub completed: bool,
-    
-    /// Error message if any
-    pub error: Option<String>,
-    
-    /// Progress summary
-    pub summary: String,
-    
-    /// Detailed history
-    pub history: Vec<StepInfo>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct StepInfo {
-    pub step: usize,
-    pub timestamp: String,
-    pub actions: Vec<String>,
-    pub summary: String,
-    pub complete: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AgentKillOutput {
-    /// Agent number that was killed
-    pub agent: u32,
-    
-    /// Success message
-    pub message: String,
-}
 
 // =============================================================================
 // TOOL IMPLEMENTATION
@@ -123,7 +77,7 @@ impl Tool for BrowserAgentTool {
         &self,
         args: Self::Args,
         ctx: ToolExecutionContext,
-    ) -> Result<Vec<Content>, McpError> {
+    ) -> Result<ToolResponse<BrowserAgentOutput>, McpError> {
         let registry = self.get_registry().await;
         let connection_id = ctx.connection_id().unwrap_or("default");
         
@@ -206,7 +160,7 @@ impl Tool for BrowserAgentTool {
                 if args.await_completion_ms == 0 {
                     let output = BrowserAgentOutput {
                         agent: args.agent,
-                        task,
+                        task: task.clone(),
                         steps_taken: 0,
                         completed: false,
                         error: None,
@@ -214,9 +168,10 @@ impl Tool for BrowserAgentTool {
                         history: vec![],
                     };
                     
-                    let json = serde_json::to_string_pretty(&output)
-                        .map_err(|e| McpError::Other(e.into()))?;
-                    return Ok(vec![Content::text(json)]);
+                    return Ok(ToolResponse::new(
+                        "Agent started in background. Use READ to check progress.",
+                        output,
+                    ));
                 }
                 
                 // Wait with timeout
@@ -235,19 +190,35 @@ impl Tool for BrowserAgentTool {
                 // Read current state (whether timed out or completed)
                 let session_output = session.read(args.agent).await;
                 
-                // Convert to output format
-                let history: Vec<StepInfo> = session_output
+                // Convert to output format using schema types
+                let history: Vec<BrowserAgentStepInfo> = session_output
                     .history
                     .steps
                     .iter()
-                    .map(|step| StepInfo {
-                        step: step.step,
-                        timestamp: step.timestamp.to_rfc3339(),
-                        actions: step.output.action.iter().map(|a| a.action.clone()).collect(),
-                        summary: step.output.current_state.summary.clone(),
-                        complete: step.is_complete,
+                    .map(|step| {
+                        let actions: Vec<String> = step.output.action
+                            .iter()
+                            .map(|a| a.action.clone())
+                            .collect();
+                        BrowserAgentStepInfo {
+                            step: step.step,
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            actions,
+                            summary: step.output.current_state.summary.clone(),
+                            complete: step.is_complete,
+                        }
                     })
                     .collect();
+                
+                let display = if wait_result.is_ok() {
+                    session_output.summary.clone()
+                } else {
+                    format!(
+                        "Agent timeout after {}ms. {} steps completed. Agent continues in background.",
+                        args.await_completion_ms,
+                        session_output.history.steps.len()
+                    )
+                };
                 
                 let output = BrowserAgentOutput {
                     agent: args.agent,
@@ -255,21 +226,11 @@ impl Tool for BrowserAgentTool {
                     steps_taken: session_output.history.steps.len(),
                     completed: session_output.completed,
                     error: session_output.error.clone(),
-                    summary: if wait_result.is_ok() {
-                        session_output.summary
-                    } else {
-                        format!(
-                            "Agent timeout after {}ms. {} steps completed. Agent continues in background.",
-                            args.await_completion_ms,
-                            session_output.history.steps.len()
-                        )
-                    },
+                    summary: session_output.summary.clone(),
                     history,
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                Ok(ToolResponse::new(display, output))
             }
             
             BrowserAgentAction::Read => {
@@ -287,33 +248,37 @@ impl Tool for BrowserAgentTool {
                 // Read current state
                 let session_output = session.read(args.agent).await;
                 
-                // Convert to output format
-                let history: Vec<StepInfo> = session_output
+                // Convert to output format using schema types
+                let history: Vec<BrowserAgentStepInfo> = session_output
                     .history
                     .steps
                     .iter()
-                    .map(|step| StepInfo {
-                        step: step.step,
-                        timestamp: step.timestamp.to_rfc3339(),
-                        actions: step.output.action.iter().map(|a| a.action.clone()).collect(),
-                        summary: step.output.current_state.summary.clone(),
-                        complete: step.is_complete,
+                    .map(|step| {
+                        let actions: Vec<String> = step.output.action
+                            .iter()
+                            .map(|a| a.action.clone())
+                            .collect();
+                        BrowserAgentStepInfo {
+                            step: step.step,
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            actions,
+                            summary: step.output.current_state.summary.clone(),
+                            complete: step.is_complete,
+                        }
                     })
                     .collect();
                 
                 let output = BrowserAgentOutput {
                     agent: args.agent,
-                    task: session_output.task,
+                    task: session_output.task.clone(),
                     steps_taken: session_output.history.steps.len(),
                     completed: session_output.completed,
                     error: session_output.error,
-                    summary: session_output.summary,
+                    summary: session_output.summary.clone(),
                     history,
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                Ok(ToolResponse::new(session_output.summary, output))
             }
             
             BrowserAgentAction::Kill => {
@@ -334,14 +299,18 @@ impl Tool for BrowserAgentTool {
                 // Remove from registry
                 registry.remove(connection_id, args.agent).await;
                 
-                let output = AgentKillOutput {
+                let message = format!("Agent {} terminated", args.agent);
+                let output = BrowserAgentOutput {
                     agent: args.agent,
-                    message: format!("Agent {} terminated", args.agent),
+                    task: String::new(),
+                    steps_taken: 0,
+                    completed: true,
+                    error: None,
+                    summary: message.clone(),
+                    history: vec![],
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                Ok(ToolResponse::new(message, output))
             }
         }
     }

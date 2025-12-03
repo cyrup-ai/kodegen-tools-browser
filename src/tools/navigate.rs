@@ -1,9 +1,11 @@
 //! Browser navigation tool - loads URLs and waits for page ready
 
-use kodegen_mcp_schema::browser::{BrowserNavigateArgs, BrowserNavigatePromptArgs, BROWSER_NAVIGATE};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{Value, json};
+use kodegen_mcp_schema::browser::{
+    BrowserNavigateArgs, BrowserNavigateOutput, BrowserNavigatePromptArgs, BROWSER_NAVIGATE,
+};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -152,7 +154,7 @@ impl Tool for BrowserNavigateTool {
         true // Accesses external URLs
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserNavigateOutput>, McpError> {
         // Store args values before moving into navigate_and_capture_page
         let timeout_ms = args.timeout_ms.unwrap_or(30000);
         let requested_url = args.url.clone();
@@ -163,12 +165,11 @@ impl Tool for BrowserNavigateTool {
         // Extract data from result JSON
         let final_url = result.get("url")
             .and_then(|v| v.as_str())
-            .unwrap_or(&requested_url);
+            .unwrap_or(&requested_url)
+            .to_string();
         let redirected = result.get("redirected")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        
-        let mut contents = Vec::new();
 
         // Terminal summary (KODEGEN pattern: 2-line colored format)
         let summary = if redirected {
@@ -188,27 +189,21 @@ impl Tool for BrowserNavigateTool {
                 timeout_ms
             )
         };
-        contents.push(Content::text(summary));
 
-        // JSON metadata (preserve all original fields)
-        let metadata = json!({
-            "success": true,
-            "url": final_url,
-            "requested_url": requested_url,
-            "redirected": redirected,
-            "timeout_ms": timeout_ms,
-            "message": format!("Navigated to {}", final_url)
-        });
-        let json_str = serde_json::to_string_pretty(&metadata)
-            .unwrap_or_else(|_| "{}".to_string());
-        contents.push(Content::text(json_str));
+        // Build typed output
+        let output = BrowserNavigateOutput {
+            success: true,
+            url: final_url,
+            title: None,
+            status_code: None,
+        };
 
         // CRITICAL FIX: Close page before returning to prevent memory leak
         if let Err(e) = page.close().await {
             tracing::warn!("Failed to close navigation page: {}", e);
         }
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

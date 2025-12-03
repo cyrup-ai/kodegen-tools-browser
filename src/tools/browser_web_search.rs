@@ -3,10 +3,9 @@
 //! Performs web searches and returns structured results with titles, URLs, and snippets.
 
 use kodegen_mcp_schema::browser::BROWSER_WEB_SEARCH;
-use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchPromptArgs};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, error::McpError};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::json;
+use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchOutput, WebSearchPromptArgs};
+use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 
 // =============================================================================
 // Tool Struct
@@ -64,7 +63,7 @@ impl Tool for BrowserWebSearchTool {
         true
     }
 
-    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<Vec<Content>, McpError> {
+    async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<WebSearchOutput>, McpError> {
         // Validate query is not empty
         if args.query.trim().is_empty() {
             return Err(McpError::invalid_arguments("Search query cannot be empty"));
@@ -77,9 +76,6 @@ impl Tool for BrowserWebSearchTool {
         let results = crate::web_search::search_with_manager(&browser_manager, args.query)
             .await
             .map_err(McpError::Other)?;
-
-        // Convert to Vec<Content> response
-        let mut contents = Vec::new();
 
         // Terminal summary
         let summary = if results.results.is_empty() {
@@ -98,26 +94,23 @@ impl Tool for BrowserWebSearchTool {
                 first_title
             )
         };
-        contents.push(Content::text(summary));
 
-        // JSON metadata
-        let metadata = json!({
-            "query": results.query,
-            "result_count": results.results.len(),
-            "results": results.results.iter().map(|r| json!({
-                "rank": r.rank,
-                "title": r.title,
-                "url": r.url,
-                "snippet": r.snippet,
-            })).collect::<Vec<_>>(),
-        });
-        let json_str = match serde_json::to_string_pretty(&metadata) {
-            Ok(s) => s,
-            Err(_) => "{}".to_string(),
+        // Build typed output using schema types
+        let output = WebSearchOutput {
+            success: true,
+            query: results.query,
+            results_count: results.results.len(),
+            results: results.results.into_iter().map(|r| {
+                kodegen_mcp_schema::citescrape::WebSearchResultItem {
+                    rank: r.rank as u32,
+                    title: r.title,
+                    url: r.url,
+                    snippet: Some(r.snippet),
+                }
+            }).collect(),
         };
-        contents.push(Content::text(json_str));
 
-        Ok(contents)
+        Ok(ToolResponse::new(summary, output))
     }
 
     fn prompt_arguments() -> Vec<PromptArgument> {

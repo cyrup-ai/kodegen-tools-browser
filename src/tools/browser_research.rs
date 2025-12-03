@@ -7,84 +7,14 @@
 use crate::research::ResearchRegistry;
 use crate::utils::{DeepResearch, ResearchOptions};
 use kodegen_mcp_schema::browser::{
-    BrowserResearchAction, BrowserResearchArgs, BrowserResearchPromptArgs, BROWSER_RESEARCH,
+    BrowserResearchAction, BrowserResearchArgs, BrowserResearchOutput, BrowserResearchPromptArgs,
+    ResearchSource, BROWSER_RESEARCH,
 };
-use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext};
-use rmcp::model::{Content, PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde::Serialize;
+use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext, ToolResponse};
+use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
-
-// =============================================================================
-// OUTPUT SCHEMAS
-// =============================================================================
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BrowserResearchOutput {
-    /// Session number
-    pub session: u32,
-    
-    /// Query being researched
-    pub query: String,
-    
-    /// Current results
-    pub results: Vec<ResearchResultOutput>,
-    
-    /// Whether research is complete
-    pub completed: bool,
-    
-    /// Progress summary
-    pub summary: String,
-    
-    /// Time information
-    pub elapsed_seconds: Option<f64>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ResearchResultOutput {
-    pub url: String,
-    pub title: String,
-    pub summary: String,
-    pub content_length: usize,
-    pub timestamp: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ResearchListOutput {
-    /// Connection ID
-    pub connection_id: String,
-    
-    /// Active sessions
-    pub sessions: Vec<SessionInfo>,
-    
-    /// Total count
-    pub total: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct SessionInfo {
-    /// Session number
-    pub session: u32,
-    
-    /// Query being researched
-    pub query: String,
-    
-    /// Whether complete
-    pub completed: bool,
-    
-    /// Current results count
-    pub results_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ResearchKillOutput {
-    /// Session number that was killed
-    pub session: u32,
-    
-    /// Success message
-    pub message: String,
-}
 
 // =============================================================================
 // TOOL IMPLEMENTATION
@@ -150,7 +80,7 @@ impl Tool for BrowserResearchTool {
         &self,
         args: Self::Args,
         ctx: ToolExecutionContext,
-    ) -> Result<Vec<Content>, McpError> {
+    ) -> Result<ToolResponse<BrowserResearchOutput>, McpError> {
         let registry = self.get_registry().await;
         let connection_id = ctx.connection_id().unwrap_or("default");
         
@@ -195,16 +125,21 @@ impl Tool for BrowserResearchTool {
                 if args.await_completion_ms == 0 {
                     let output = BrowserResearchOutput {
                         session: args.session,
+                        status: "running".to_string(),
                         query,
-                        results: vec![],
+                        pages_analyzed: 0,
+                        max_pages: args.max_pages,
                         completed: false,
-                        summary: "Research started in background. Use READ to check progress.".to_string(),
-                        elapsed_seconds: None,
+                        summary: None,
+                        key_findings: None,
+                        sources: vec![],
+                        error: None,
                     };
                     
-                    let json = serde_json::to_string_pretty(&output)
-                        .map_err(|e| McpError::Other(e.into()))?;
-                    return Ok(vec![Content::text(json)]);
+                    return Ok(ToolResponse::new(
+                        "Research started in background. Use READ to check progress.",
+                        output,
+                    ));
                 }
                 
                 // Wait with timeout
@@ -223,39 +158,41 @@ impl Tool for BrowserResearchTool {
                 // Read current state (whether timed out or completed)
                 let session_output = session.read(args.session).await;
                 
-                // Convert to output format
-                let results: Vec<ResearchResultOutput> = session_output
+                // Convert to output format using schema types
+                let sources: Vec<ResearchSource> = session_output
                     .results
                     .iter()
-                    .map(|r| ResearchResultOutput {
+                    .map(|r| ResearchSource {
                         url: r.url.clone(),
-                        title: r.title.clone(),
-                        summary: r.summary.clone(),
-                        content_length: r.content.len(),
-                        timestamp: r.timestamp.to_rfc3339(),
+                        title: Some(r.title.clone()),
+                        summary: Some(r.summary.clone()),
                     })
                     .collect();
                 
-                let output = BrowserResearchOutput {
-                    session: args.session,
-                    query: session_output.query,
-                    results,
-                    completed: session_output.completed,
-                    summary: if wait_result.is_ok() {
-                        session_output.summary
-                    } else {
-                        format!(
-                            "Research timeout after {}ms. {} results so far. Research continues in background.",
-                            args.await_completion_ms,
-                            session_output.results.len()
-                        )
-                    },
-                    elapsed_seconds: None,
+                let display = if wait_result.is_ok() {
+                    session_output.summary.clone()
+                } else {
+                    format!(
+                        "Research timeout after {}ms. {} results so far. Research continues in background.",
+                        args.await_completion_ms,
+                        session_output.results.len()
+                    )
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                let output = BrowserResearchOutput {
+                    session: args.session,
+                    status: if session_output.completed { "completed" } else { "running" }.to_string(),
+                    query: session_output.query,
+                    pages_analyzed: session_output.results.len(),
+                    max_pages: args.max_pages,
+                    completed: session_output.completed,
+                    summary: if session_output.completed { Some(session_output.summary.clone()) } else { None },
+                    key_findings: None,
+                    sources,
+                    error: None,
+                };
+                
+                Ok(ToolResponse::new(display, output))
             }
             
             BrowserResearchAction::Read => {
@@ -289,31 +226,31 @@ impl Tool for BrowserResearchTool {
                     });
                 }
                 
-                // Convert to output format
-                let results: Vec<ResearchResultOutput> = session_output
+                // Convert to output format using schema types
+                let sources: Vec<ResearchSource> = session_output
                     .results
                     .iter()
-                    .map(|r| ResearchResultOutput {
+                    .map(|r| ResearchSource {
                         url: r.url.clone(),
-                        title: r.title.clone(),
-                        summary: r.summary.clone(),
-                        content_length: r.content.len(),
-                        timestamp: r.timestamp.to_rfc3339(),
+                        title: Some(r.title.clone()),
+                        summary: Some(r.summary.clone()),
                     })
                     .collect();
                 
                 let output = BrowserResearchOutput {
                     session: args.session,
-                    query: session_output.query,
-                    results,
+                    status: if session_output.completed { "completed" } else { "running" }.to_string(),
+                    query: session_output.query.clone(),
+                    pages_analyzed: session_output.results.len(),
+                    max_pages: args.max_pages,
                     completed: session_output.completed,
-                    summary: session_output.summary,
-                    elapsed_seconds: None,
+                    summary: if session_output.completed { Some(session_output.summary.clone()) } else { None },
+                    key_findings: None,
+                    sources,
+                    error: None,
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                Ok(ToolResponse::new(session_output.summary, output))
             }
             
             BrowserResearchAction::List => {
@@ -323,24 +260,37 @@ impl Tool for BrowserResearchTool {
                     .await
                     .map_err(McpError::Other)?;
                 
-                let output = ResearchListOutput {
-                    connection_id: list_output.connection_id,
-                    sessions: list_output
-                        .sessions
-                        .iter()
-                        .map(|s| SessionInfo {
-                            session: s.session,
-                            query: s.query.clone(),
-                            completed: s.completed,
-                            results_count: s.results_count,
-                        })
-                        .collect(),
-                    total: list_output.total,
+                // Build display string with session info
+                let display = if list_output.sessions.is_empty() {
+                    format!("No active research sessions for connection {}", list_output.connection_id)
+                } else {
+                    let sessions_info: Vec<String> = list_output.sessions.iter()
+                        .map(|s| format!(
+                            "Session {}: query='{}', completed={}, results={}",
+                            s.session, s.query, s.completed, s.results_count
+                        ))
+                        .collect();
+                    format!(
+                        "Active research sessions for connection {}:\n{}",
+                        list_output.connection_id,
+                        sessions_info.join("\n")
+                    )
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                let output = BrowserResearchOutput {
+                    session: args.session,
+                    status: "list".to_string(),
+                    query: String::new(),
+                    pages_analyzed: list_output.total,
+                    max_pages: 0,
+                    completed: true,
+                    summary: Some(display.clone()),
+                    key_findings: None,
+                    sources: vec![],
+                    error: None,
+                };
+                
+                Ok(ToolResponse::new(display, output))
             }
             
             BrowserResearchAction::Kill => {
@@ -361,14 +311,21 @@ impl Tool for BrowserResearchTool {
                 // Remove from registry
                 registry.remove(connection_id, args.session).await;
                 
-                let output = ResearchKillOutput {
+                let message = format!("Research session {} terminated", args.session);
+                let output = BrowserResearchOutput {
                     session: args.session,
-                    message: format!("Research session {} terminated", args.session),
+                    status: "killed".to_string(),
+                    query: String::new(),
+                    pages_analyzed: 0,
+                    max_pages: 0,
+                    completed: true,
+                    summary: None,
+                    key_findings: None,
+                    sources: vec![],
+                    error: None,
                 };
                 
-                let json = serde_json::to_string_pretty(&output)
-                    .map_err(|e| McpError::Other(e.into()))?;
-                Ok(vec![Content::text(json)])
+                Ok(ToolResponse::new(message, output))
             }
         }
     }
