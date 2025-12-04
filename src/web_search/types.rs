@@ -1,7 +1,6 @@
 //! Data structures and constants for web search functionality
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 // =============================================================================
 // Constants
@@ -55,18 +54,7 @@ pub struct SearchResult {
     pub snippet: String,
 }
 
-impl SearchResult {
-    /// Convert to `serde_json::Value` for MCP response
-    #[must_use]
-    pub fn to_json(&self) -> Value {
-        serde_json::json!({
-            "rank": self.rank,
-            "title": self.title,
-            "url": self.url,
-            "snippet": self.snippet
-        })
-    }
-}
+
 
 /// Collection of search results
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,13 +73,5 @@ impl SearchResults {
         Self { query, results }
     }
 
-    /// Convert to `serde_json::Value` for MCP response
-    #[must_use]
-    pub fn to_json(&self) -> Value {
-        serde_json::json!({
-            "query": self.query,
-            "result_count": self.results.len(),
-            "results": self.results.iter().map(SearchResult::to_json).collect::<Vec<_>>()
-        })
-    }
+
 }

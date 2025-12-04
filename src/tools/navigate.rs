@@ -5,11 +5,33 @@ use kodegen_mcp_schema::browser::{
 };
 use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
 use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
-use serde_json::{json, Value};
+// Removed serde_json::{json, Value} - no longer needed after conversion to typed NavigationResult
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
 use crate::utils::validate_navigation_timeout;
+
+/// Internal navigation result returned by navigate_and_capture_page()
+/// 
+/// This is NOT exposed via MCP schema (use BrowserNavigateOutput for that).
+/// Contains additional metadata for internal logic: requested_url, redirected, message.
+#[derive(Debug, Clone)]
+pub(crate) struct NavigationResult {
+    /// Whether navigation succeeded
+    pub success: bool,
+    
+    /// Final URL after navigation (may differ from requested_url due to redirects)
+    pub url: String,
+    
+    /// Originally requested URL (before any redirects)
+    pub requested_url: String,
+    
+    /// Whether the final URL differs from requested URL
+    pub redirected: bool,
+    
+    /// Human-readable message describing the navigation
+    pub message: String,
+}
 
 #[derive(Clone)]
 pub struct BrowserNavigateTool {
@@ -28,7 +50,7 @@ impl BrowserNavigateTool {
     pub(crate) async fn navigate_and_capture_page(
         &self,
         args: BrowserNavigateArgs,
-    ) -> Result<(chromiumoxide::Page, Value), McpError> {
+    ) -> Result<(chromiumoxide::Page, NavigationResult), McpError> {
         // Validate URL protocol
         if !args.url.starts_with("http://") && !args.url.starts_with("https://") {
             return Err(McpError::invalid_arguments(
@@ -118,13 +140,13 @@ impl BrowserNavigateTool {
             .map_err(|e| McpError::Other(anyhow::anyhow!("Failed to get URL: {}", e)))?
             .unwrap_or_else(|| args.url.clone());
 
-        let result = json!({
-            "success": true,
-            "url": final_url,
-            "requested_url": args.url,
-            "redirected": final_url != args.url,
-            "message": format!("Navigated to {}", final_url)
-        });
+        let result = NavigationResult {
+            success: true,
+            url: final_url.clone(),
+            requested_url: args.url.clone(),
+            redirected: final_url != args.url,
+            message: format!("Navigated to {}", final_url),
+        };
 
         // Return BOTH page and JSON (new behavior for parallel execution)
         Ok((page, result))
@@ -155,21 +177,19 @@ impl Tool for BrowserNavigateTool {
     }
 
     async fn execute(&self, args: Self::Args, _ctx: ToolExecutionContext) -> Result<ToolResponse<BrowserNavigateOutput>, McpError> {
-        // Store args values before moving into navigate_and_capture_page
+        // Store timeout before moving args
         let timeout_ms = args.timeout_ms.unwrap_or(30000);
-        let requested_url = args.url.clone();
         
         // Capture page handle to ensure cleanup (CRITICAL: don't use _page)
         let (page, result) = self.navigate_and_capture_page(args).await?;
         
-        // Extract data from result JSON
-        let final_url = result.get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&requested_url)
-            .to_string();
-        let redirected = result.get("redirected")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        // Extract data from typed result
+        let final_url = result.url;
+        let redirected = result.redirected;
+        let requested_url = result.requested_url;
+
+        // Log navigation result for debugging
+        tracing::debug!("{}", result.message);
 
         // Terminal summary (KODEGEN pattern: 2-line colored format)
         let summary = if redirected {
@@ -192,7 +212,7 @@ impl Tool for BrowserNavigateTool {
 
         // Build typed output
         let output = BrowserNavigateOutput {
-            success: true,
+            success: result.success,
             url: final_url,
             title: None,
             status_code: None,

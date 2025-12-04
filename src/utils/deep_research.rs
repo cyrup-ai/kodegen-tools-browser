@@ -256,11 +256,7 @@ impl DeepResearch {
             .map_err(|e| UtilsError::BrowserError(e.to_string()))?;
 
         // Parse final URL from result
-        let final_url = nav_result
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or(url)
-            .to_string();
+        let final_url = nav_result.url;
 
         // 2. EXTRACT PAGE INFO - uses captured page
         debug!("Extracting page info from captured page");
