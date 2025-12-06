@@ -2,10 +2,9 @@
 //!
 //! Performs web searches and returns structured results with titles, URLs, and snippets.
 
-use kodegen_mcp_schema::browser::BROWSER_WEB_SEARCH;
-use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchOutput, WebSearchPromptArgs};
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::browser::{BROWSER_WEB_SEARCH, WebSearchPrompts};
+use kodegen_mcp_schema::citescrape::{WebSearchArgs, WebSearchOutput};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 
 // =============================================================================
 // Tool Struct
@@ -33,7 +32,7 @@ impl Default for BrowserWebSearchTool {
 
 impl Tool for BrowserWebSearchTool {
     type Args = WebSearchArgs;
-    type PromptArgs = WebSearchPromptArgs;
+    type Prompts = WebSearchPrompts;
 
     fn name() -> &'static str {
         BROWSER_WEB_SEARCH
@@ -111,82 +110,5 @@ impl Tool for BrowserWebSearchTool {
         };
 
         Ok(ToolResponse::new(summary, output))
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![
-            PromptArgument {
-                name: "query_type".to_string(),
-                title: None,
-                description: Some(
-                    "Type of search queries to focus examples on (e.g., 'technical', 'documentation', 'code examples', 'general')"
-                        .to_string(),
-                ),
-                required: Some(false),
-            },
-            PromptArgument {
-                name: "focus_area".to_string(),
-                title: None,
-                description: Some(
-                    "Domain or technology to focus examples on (e.g., 'Rust', 'Python', 'security', 'web development')"
-                        .to_string(),
-                ),
-                required: Some(false),
-            },
-            PromptArgument {
-                name: "depth".to_string(),
-                title: None,
-                description: Some(
-                    "Complexity level for the teaching prompt (e.g., 'basic', 'intermediate', 'advanced')"
-                        .to_string(),
-                ),
-                required: Some(false),
-            },
-        ]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text("How do I search the web?"),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "The web_search tool performs web searches and returns structured results:\\n\\n\
-                     **Basic usage:**\\n\
-                     ```json\\n\
-                     web_search({\\\"query\\\": \\\"rust async programming\\\"})\\n\
-                     ```\\n\\n\
-                     **Response format:**\\n\
-                     ```json\\n\
-                     {\\n\
-                       \\\"query\\\": \\\"rust async programming\\\",\\n\
-                       \\\"result_count\\\": 10,\\n\
-                       \\\"results\\\": [\\n\
-                         {\\n\
-                           \\\"rank\\\": 1,\\n\
-                           \\\"title\\\": \\\"Async Programming in Rust\\\",\\n\
-                           \\\"url\\\": \\\"https://rust-lang.org/async\\\",\\n\
-                           \\\"snippet\\\": \\\"Learn about async/await in Rust...\\\"\\n\
-                         }\\n\
-                       ]\\n\
-                     }\\n\
-                     ```\\n\\n\
-                     **Key features:**\\n\
-                     - Returns up to 10 results\\n\
-                     - Includes title, URL, and description snippet\\n\
-                     - Results ranked by relevance\\n\
-                     - Automatic retry with exponential backoff\\n\
-                     - Stealth browser configuration to avoid bot detection\\n\\n\
-                     **Use cases:**\\n\
-                     - Research technical topics\\n\
-                     - Find documentation and tutorials\\n\
-                     - Gather information for code generation\\n\
-                     - Discover relevant libraries and tools",
-                ),
-            },
-        ])
     }
 }

@@ -268,7 +268,7 @@ pub async fn launch_browser(
 
     // Use provided chrome_data_dir or fall back to process ID
     let user_data_dir_path = chrome_data_dir.unwrap_or_else(|| {
-        std::env::temp_dir().join(format!("enigo_chrome_{}", std::process::id()))
+        std::env::temp_dir().join(format!("kodegen_chrome_{}", std::process::id()))
     });
 
     // Create directory with automatic cleanup on error

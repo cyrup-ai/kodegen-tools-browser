@@ -4,10 +4,10 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chromiumoxide::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use kodegen_mcp_schema::browser::{
-    BrowserScreenshotArgs, BrowserScreenshotOutput, BrowserScreenshotPromptArgs, BROWSER_SCREENSHOT,
+    BrowserScreenshotArgs, BrowserScreenshotOutput, BROWSER_SCREENSHOT,
+    ScreenshotPrompts,
 };
-use kodegen_mcp_tool::{Tool, ToolExecutionContext, ToolResponse, error::McpError};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::{Tool, ToolExecutionContext, ToolResponse, McpError};
 use std::sync::Arc;
 
 use crate::manager::BrowserManager;
@@ -25,7 +25,7 @@ impl BrowserScreenshotTool {
 
 impl Tool for BrowserScreenshotTool {
     type Args = BrowserScreenshotArgs;
-    type PromptArgs = BrowserScreenshotPromptArgs;
+    type Prompts = ScreenshotPrompts;
 
     fn name() -> &'static str {
         BROWSER_SCREENSHOT
@@ -178,133 +178,5 @@ impl Tool for BrowserScreenshotTool {
         };
 
         Ok(ToolResponse::new(summary, output))
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![PromptArgument {
-            name: "focus".to_string(),
-            title: None,
-            description: Some(
-                "What aspect to focus on: 'formats' (PNG vs JPEG), 'selectors' (CSS selection), \
-                 'elements' (element vs full-page), or 'all' (comprehensive)"
-                    .to_string(),
-            ),
-            required: Some(false),
-        }]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "I need to take screenshots of web pages. What should I know about using browser_screenshot?"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "The browser_screenshot tool captures visual content from the current browser page. \
-                     After you've navigated to a page with browser_navigate, you can:\n\n\
-                     1. FULL PAGE SCREENSHOT (default):\n    \
-                     browser_screenshot({})\n\n\
-                     2. ELEMENT SCREENSHOT (specific element):\n    \
-                     browser_screenshot({\"selector\": \"#content\"})\n    \
-                     browser_screenshot({\"selector\": \".form-container\"})\n\n\
-                     3. FORMAT SELECTION:\n    \
-                     browser_screenshot({\"format\": \"png\"})    # Lossless, larger files, best for text/diagrams\n    \
-                     browser_screenshot({\"format\": \"jpeg\"})   # Lossy, smaller files, best for photos\n\n\
-                     The tool returns base64-encoded image data suitable for:\n    \
-                     - Vision model analysis\n    \
-                     - Including in reports or documentation\n    \
-                     - Verifying visual appearance"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "What are common mistakes when taking screenshots?"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "Common mistakes to avoid:\n\n\
-                     1. NOT NAVIGATING FIRST:\n    \
-                     ERROR: browser_screenshot({}) without browser_navigate\n    \
-                     FIX: Always call browser_navigate(url) before taking screenshots\n\n\
-                     2. INVALID CSS SELECTORS:\n    \
-                     ERROR: browser_screenshot({\"selector\": \"my-element\"})  // bare element names don't work\n    \
-                     CORRECT SELECTORS:\n      \
-                     - browser_screenshot({\"selector\": \"#my-id\"})           // ID selector\n      \
-                     - browser_screenshot({\"selector\": \".my-class\"})         // Class selector\n      \
-                     - browser_screenshot({\"selector\": \"div.card\"})          // Tag + class\n      \
-                     - browser_screenshot({\"selector\": \"button[aria-label='Save']\"})  // Attribute\n\n\
-                     3. SELECTING INVISIBLE ELEMENTS:\n    \
-                     ERROR: Selector exists but element is display:none or visibility:hidden\n    \
-                     ERROR: Selector is inside an iframe (iframes not supported)\n    \
-                     ERROR: Element is outside viewport or off-screen\n\n\
-                     4. WRONG FORMAT FOR USE CASE:\n    \
-                     Use PNG for: UI layouts, code blocks, technical diagrams, charts\n    \
-                     Use JPEG for: Photos, images, screenshots with gradients"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "When should I take element screenshots vs full page?"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "Use FULL PAGE screenshots when:\n    \
-                     - You need to see overall page layout\n    \
-                     - You want to capture everything above the fold\n    \
-                     - You're documenting page appearance\n    \
-                     - The element is too large or complex\n\n\
-                     Use ELEMENT screenshots when:\n    \
-                     - You need to isolate a specific component (button, card, form)\n    \
-                     - You want to analyze just one element\n    \
-                     - You're testing visual consistency\n    \
-                     - The full page is too large or contains unwanted context\n\n\
-                     Example workflow:\n    \
-                     1. browser_navigate({\"url\": \"https://example.com\"})\n    \
-                     2. browser_screenshot({})  // See full page\n    \
-                     3. browser_screenshot({\"selector\": \".modal\"})  // Isolate modal dialog\n    \
-                     4. browser_screenshot({\"selector\": \"form\", \"format\": \"png\"})  // Sharp form screenshot"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text(
-                    "What's the typical workflow for taking and analyzing screenshots?"
-                ),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(
-                    "TYPICAL SCREENSHOT WORKFLOW:\n\n\
-                     1. NAVIGATE to target page:\n    \
-                     browser_navigate({\"url\": \"https://example.com\", \"wait_for_selector\": \".content-loaded\"})\n\n\
-                     2. TAKE screenshot to understand structure:\n    \
-                     browser_screenshot({\"format\": \"png\"})  // PNG for clarity\n\n\
-                     3. INTERACT with page (optional):\n    \
-                     browser_click({\"selector\": \".expand-button\"})\n\n\
-                     4. CAPTURE UPDATED STATE:\n    \
-                     browser_screenshot({\"selector\": \".expanded-content\"})\n\n\
-                     5. USE SCREENSHOT for:\n    \
-                     - Vision model to analyze what's visible\n    \
-                     - Verifying page state after interactions\n    \
-                     - Debugging layout or styling issues\n    \
-                     - Including in reports or logs\n\n\
-                     OPTIMIZATION TIPS:\n    \
-                     - Use PNG format (default) for UI - sharper and clearer\n    \
-                     - Use JPEG only if file size is critical\n    \
-                     - Element screenshots are faster than full page\n    \
-                     - Screenshot returns base64 immediately - no streaming delay"
-                ),
-            },
-        ])
     }
 }

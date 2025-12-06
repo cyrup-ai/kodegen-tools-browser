@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use chromiumoxide::Page;
 use chromiumoxide::element::Element;
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 
 /// Wait for an element to appear in the DOM using exponential backoff polling
 ///

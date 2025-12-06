@@ -7,11 +7,11 @@
 use crate::research::ResearchRegistry;
 use crate::utils::{DeepResearch, ResearchOptions};
 use kodegen_mcp_schema::browser::{
-    BrowserResearchAction, BrowserResearchArgs, BrowserResearchOutput, BrowserResearchPromptArgs,
+    BrowserResearchAction, BrowserResearchArgs, BrowserResearchOutput,
     ResearchSource, BROWSER_RESEARCH,
+    ResearchPrompts,
 };
-use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext, ToolResponse};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::{McpError, Tool, ToolExecutionContext, ToolResponse};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -44,7 +44,7 @@ impl BrowserResearchTool {
 
 impl Tool for BrowserResearchTool {
     type Args = BrowserResearchArgs;
-    type PromptArgs = BrowserResearchPromptArgs;
+    type Prompts = ResearchPrompts;
 
     fn name() -> &'static str {
         BROWSER_RESEARCH
@@ -328,86 +328,5 @@ impl Tool for BrowserResearchTool {
                 Ok(ToolResponse::new(message, output))
             }
         }
-    }
-
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![
-            PromptArgument {
-                name: "research_depth".to_string(),
-                title: None,
-                description: Some(
-                    "Research depth: 'shallow' (3 pages), 'moderate' (5 pages), 'deep' (15 pages)".to_string(),
-                ),
-                required: Some(false),
-            },
-            PromptArgument {
-                name: "use_case".to_string(),
-                title: None,
-                description: Some(
-                    "Use case: 'technical', 'news', 'documentation', or 'general'".to_string(),
-                ),
-                required: Some(false),
-            },
-        ]
-    }
-
-    async fn prompt(&self, args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        let depth = args.research_depth.as_deref().unwrap_or("moderate");
-        let use_case = args.use_case.as_deref().unwrap_or("general");
-        
-        let message = format!(
-            "# browser_research - Session-Based Research\n\n\
-             ## Actions\n\n\
-             ### RESEARCH - Start Research\n\
-             ```json\n\
-             {{\n  \
-               \"action\": \"RESEARCH\",\n  \
-               \"session\": 0,\n  \
-               \"query\": \"Rust async patterns\",\n  \
-               \"max_pages\": 5,\n  \
-               \"await_completion_ms\": 300000\n\
-             }}\n\
-             ```\n\n\
-             ### READ - Check Progress\n\
-             ```json\n\
-             {{\n  \
-               \"action\": \"READ\",\n  \
-               \"session\": 0\n\
-             }}\n\
-             ```\n\n\
-             ### LIST - Show All Sessions\n\
-             ```json\n\
-             {{\n  \
-               \"action\": \"LIST\"\n\
-             }}\n\
-             ```\n\n\
-             ### KILL - Destroy Research Session\n\
-             ```json\n\
-             {{\n  \
-               \"action\": \"KILL\",\n  \
-               \"session\": 0\n\
-             }}\n\
-             ```\n\n\
-             ## Parameters ({depth} research, {use_case} use case)\n\n\
-             - `action`: RESEARCH/READ/LIST/KILL (required)\n\
-             - `session`: Session slot number (default: 0)\n\
-             - `query`: Research topic (required for RESEARCH)\n\
-             - `max_pages`: Pages to visit (3-15, default: 5)\n\
-             - `await_completion_ms`: Timeout in ms (0=fire-and-forget, default: 300000=5min)\n\
-             - `max_depth`: Link depth (1-4, default: 2)\n\
-             - `search_engine`: google/bing/duckduckgo (default: google)\n\
-             - `temperature`: LLM creativity (0.0-2.0, default: 0.5)\n"
-        );
-        
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text("How do I use browser_research?"),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(message),
-            },
-        ])
     }
 }

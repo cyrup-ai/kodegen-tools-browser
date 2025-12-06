@@ -6,7 +6,7 @@ use chromiumoxide::Page;
 use chromiumoxide::element::Element;
 use kalosm::language::*;
 use kalosm_llama::{Llama, LlamaSource};
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 use tokio::runtime::Handle;
 use tracing::{debug, info};
 

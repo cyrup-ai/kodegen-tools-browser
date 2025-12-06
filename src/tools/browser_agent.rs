@@ -10,11 +10,11 @@ use crate::agent::registry::AgentRegistry;
 use crate::manager::BrowserManager;
 use crate::utils::AgentState;
 use kodegen_mcp_schema::browser::{
-    BrowserAgentAction, BrowserAgentArgs, BrowserAgentOutput, BrowserAgentPromptArgs,
+    BrowserAgentAction, BrowserAgentArgs, BrowserAgentOutput,
     BrowserAgentStepInfo, BROWSER_AGENT, BROWSER_NAVIGATE,
+    AgentPrompts,
 };
-use kodegen_mcp_tool::{error::McpError, Tool, ToolExecutionContext, ToolResponse};
-use rmcp::model::{PromptArgument, PromptMessage, PromptMessageContent, PromptMessageRole};
+use kodegen_mcp_schema::{McpError, Tool, ToolExecutionContext, ToolResponse};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,7 +50,7 @@ impl BrowserAgentTool {
 
 impl Tool for BrowserAgentTool {
     type Args = BrowserAgentArgs;
-    type PromptArgs = BrowserAgentPromptArgs;
+    type Prompts = AgentPrompts;
 
     fn name() -> &'static str {
         BROWSER_AGENT
@@ -315,78 +315,4 @@ impl Tool for BrowserAgentTool {
         }
     }
 
-    fn prompt_arguments() -> Vec<PromptArgument> {
-        vec![PromptArgument {
-            name: "focus_area".to_string(),
-            title: None,
-            description: Some(
-                "Focus area: 'research', 'forms', 'workflow', or 'general'".to_string(),
-            ),
-            required: Some(false),
-        }]
-    }
-
-    async fn prompt(&self, _args: Self::PromptArgs) -> Result<Vec<PromptMessage>, McpError> {
-        let message = r#"# browser_agent - Session-Based Browser Automation
-
-## Actions
-
-### PROMPT - Prompt Agent with Task
-```json
-{
-  "action": "PROMPT",
-  "agent": 0,
-  "task": "Find latest Rust version and extract release notes",
-  "start_url": "https://www.rust-lang.org/",
-  "max_steps": 8,
-  "await_completion_ms": 600000
-}
-```
-
-### READ - Check Progress
-```json
-{
-  "action": "READ",
-  "agent": 0
-}
-```
-
-### KILL - Destroy Agent Session
-```json
-{
-  "action": "KILL",
-  "agent": 0
-}
-```
-
-## Parameters
-
-- `action`: PROMPT/READ/KILL (required)
-- `agent`: Agent slot number (default: 0)
-- `task`: Task description (required for PROMPT)
-- `start_url`: Initial URL (optional)
-- `max_steps`: Max iterations (default: 10)
-- `await_completion_ms`: Timeout in ms (0=fire-and-forget, default: 600000=10min)
-- `temperature`: LLM creativity (0.0-2.0, default: 0.7)
-- `max_actions_per_step`: Actions per iteration (default: 3)
-- `additional_info`: Extra context (optional)
-
-## Use Cases
-
-**Web Research**: temperature=0.8, max_steps=12
-**Form Filling**: temperature=0.5, max_actions_per_step=2
-**Multi-page Workflow**: max_steps=15-20
-"#;
-        
-        Ok(vec![
-            PromptMessage {
-                role: PromptMessageRole::User,
-                content: PromptMessageContent::text("How do I use browser_agent?"),
-            },
-            PromptMessage {
-                role: PromptMessageRole::Assistant,
-                content: PromptMessageContent::text(message),
-            },
-        ])
-    }
 }

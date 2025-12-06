@@ -1,6 +1,6 @@
 //! Timeout validation utilities for browser operations
 
-use kodegen_mcp_tool::error::McpError;
+use kodegen_mcp_schema::McpError;
 use std::time::Duration;
 
 /// Maximum timeout for browser navigation operations (5 minutes)
