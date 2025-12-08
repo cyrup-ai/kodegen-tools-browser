@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use serde_json::json;
 use tracing::info;
+use kodegen_config::{BROWSER_AGENT, BROWSER_CLICK, BROWSER_EXTRACT_TEXT, BROWSER_NAVIGATE, BROWSER_SCREENSHOT, BROWSER_SCROLL, BROWSER_TYPE_TEXT, BROWSER_WEB_SEARCH};
 
 mod common;
 
@@ -55,7 +56,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("1️⃣  browser_navigate → docs.rs");
     client
         .call_tool(
-            "browser_navigate",
+            BROWSER_NAVIGATE,
             json!({
                 "url": "https://docs.rs",
                 "wait_for_selector": "#search"
@@ -68,7 +69,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("2️⃣  browser_type_text → \"async\"");
     client
         .call_tool(
-            "browser_type_text",
+            kodegen_config::BROWSER_TYPE_TEXT,
             json!({
                 "selector": "#search",
                 "text": "async"
@@ -81,7 +82,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("3️⃣  browser_click → Submit button");
     client
         .call_tool(
-            "browser_click",
+            kodegen_config::BROWSER_CLICK,
             json!({
                 "selector": "button[type=\"submit\"], .search-button, form button",
                 "wait_for_navigation": true
@@ -92,7 +93,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
 
     // Step 4: Extract search results
     info!("4️⃣  browser_extract_text → Search results");
-    let result = client.call_tool("browser_extract_text", json!({})).await?;
+    let result = client.call_tool(kodegen_config::BROWSER_EXTRACT_TEXT, json!({})).await?;
 
     if let Some(content) = result.content.first()
         && let Some(text) = content.as_text()
@@ -112,7 +113,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("5️⃣  browser_scroll → Scroll down 500px");
     client
         .call_tool(
-            "browser_scroll",
+            kodegen_config::BROWSER_SCROLL,
             json!({
                 "y": 500
             }),
@@ -124,7 +125,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("6️⃣  browser_screenshot → Capture results");
     let result = client
         .call_tool(
-            "browser_screenshot",
+            kodegen_config::BROWSER_SCREENSHOT,
             json!({
                 "format": "png"
             }),
@@ -153,7 +154,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("8️⃣  web_search → \"Rust MCP server examples\"");
     let result = client
         .call_tool(
-            "web_search",
+            BROWSER_WEB_SEARCH,
             json!({
                 "query": "Rust MCP server examples"
             }),
@@ -307,7 +308,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
 
     let result = client
         .call_tool(
-            "browser_agent",
+            kodegen_config::BROWSER_AGENT,
             json!({
                 "task": "Compare axum vs actix-web crates on crates.io - find downloads, latest version, and key features for each",
                 "start_url": "https://crates.io",

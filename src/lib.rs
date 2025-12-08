@@ -175,89 +175,18 @@ pub async fn start_server(
     tls_cert: Option<std::path::PathBuf>,
     tls_key: Option<std::path::PathBuf>,
 ) -> anyhow::Result<kodegen_server_http::ServerHandle> {
-    use kodegen_server_http::{create_http_server, Managers, RouterSet, register_tool};
-    use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
-    use std::time::Duration;
+    // Bind to the address first
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
 
+    // Convert separate cert/key into Option<(cert, key)> tuple
     let tls_config = match (tls_cert, tls_key) {
         (Some(cert), Some(key)) => Some((cert, key)),
         _ => None,
     };
 
-    let shutdown_timeout = Duration::from_secs(30);
-    let session_keep_alive = Duration::ZERO;
-
-    create_http_server("browser", addr, tls_config, shutdown_timeout, session_keep_alive, |_config, _tracker| {
-        Box::pin(async move {
-            let mut tool_router = ToolRouter::new();
-            let mut prompt_router = PromptRouter::new();
-            let managers = Managers::new();
-
-            // Fixed server URL for loopback tools (port 30440)
-            let server_url = "http://127.0.0.1:30440/mcp".to_string();
-
-            // Initialize browser manager (global singleton)
-            let browser_manager = crate::BrowserManager::global();
-            managers.register(BrowserManagerWrapper(browser_manager.clone())).await;
-
-            // Register all 9 browser tools (was 13)
-
-            // Core browser automation tools (6 tools)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserNavigateTool::new(browser_manager.clone()),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserClickTool::new(browser_manager.clone()),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserTypeTextTool::new(browser_manager.clone()),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserScreenshotTool::new(browser_manager.clone()),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserExtractTextTool::new(browser_manager.clone()),
-            );
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserScrollTool::new(browser_manager.clone()),
-            );
-
-            // Advanced browser tools (1 tool)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserAgentTool::new(browser_manager.clone(), server_url.clone()),
-            );
-
-            // Browser research tool (1 tool - replaces 5 polling tools)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserResearchTool::new(browser_manager.clone()),
-            );
-
-            // Web search tool (1 tool)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserWebSearchTool::new(),
-            );
-
-            Ok(RouterSet::new(tool_router, prompt_router, managers))
-        })
-    }).await
+    // Delegate to start_server_with_listener
+    start_server_with_listener(listener, tls_config).await
 }
 
 /// Start browser tools HTTP server using pre-bound listener (TOCTOU-safe)
@@ -275,21 +204,18 @@ pub async fn start_server_with_listener(
     listener: tokio::net::TcpListener,
     tls_config: Option<(std::path::PathBuf, std::path::PathBuf)>,
 ) -> anyhow::Result<kodegen_server_http::ServerHandle> {
-    use kodegen_server_http::{create_http_server_with_listener, Managers, RouterSet, register_tool};
+    use kodegen_server_http::{ServerBuilder, Managers, RouterSet, register_tool};
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
-    use std::time::Duration;
 
-    let shutdown_timeout = Duration::from_secs(30);
-    let session_keep_alive = Duration::ZERO;
-
-    create_http_server_with_listener("browser", listener, tls_config, shutdown_timeout, session_keep_alive, |_config, _tracker| {
-        Box::pin(async move {
+    let mut builder = ServerBuilder::new()
+        .category(kodegen_config::CATEGORY_BROWSER)
+        .register_tools(|| async {
             let mut tool_router = ToolRouter::new();
             let mut prompt_router = PromptRouter::new();
             let managers = Managers::new();
 
-            // Fixed server URL for loopback tools (port 30440)
-            let server_url = "http://127.0.0.1:30440/mcp".to_string();
+            // Fixed server URL for loopback tools
+            let server_url = format!("http://127.0.0.1:{}/mcp", kodegen_config::PORT_BROWSER);
 
             // Initialize browser manager (global singleton)
             let browser_manager = crate::BrowserManager::global();
@@ -352,5 +278,11 @@ pub async fn start_server_with_listener(
 
             Ok(RouterSet::new(tool_router, prompt_router, managers))
         })
-    }).await
+        .with_listener(listener);
+
+    if let Some((cert, key)) = tls_config {
+        builder = builder.with_tls_config(cert, key);
+    }
+
+    builder.serve().await
 }
