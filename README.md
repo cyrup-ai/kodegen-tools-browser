@@ -11,7 +11,7 @@
 
 kodegen-tools-browser is a high-performance Model Context Protocol (MCP) server that provides browser automation capabilities for AI agents. Built in Rust with chromiumoxide, it offers 13 specialized tools for web automation, search, and autonomous research.
 
-## Features
+## Features 
 
 - **🚀 High Performance**: Rust-powered with global singleton browser instance (~2-3s first launch, <1ms subsequent calls)
 - **🎭 Stealth Automation**: Kromekover evasion system with 20+ anti-detection scripts
