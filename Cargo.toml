@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_browser"
-version = "0.10.1"
+version = "0.10.2"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -42,7 +42,7 @@ kodegen_config = { version = "0.10" }
 kodegen_mcp_client = { version = "0.10" }
 cyrup_sugars = { version = "0.5", package = "cyrup_sugars", features = ["all"] }
 
-rmcp = { version = "0.10", features = ["client", "schemars", "server", "transport-sse-server"] }
+rmcp = { version = "0.11", features = ["client", "schemars", "server"] }
 schemars = "1"
 
 # Async runtime
@@ -54,9 +54,9 @@ futures-util = "0.3"
 async-trait = "0.1"
 
 # Browser automation (CRITICAL: must use git dependency)
-chromiumoxide = { version = "0.7", features = ["tokio-runtime", "bytes", "_fetcher-native-tokio"], default-features = false }
-chromiumoxide_cdp = { version = "0.7" }
-chromiumoxide_types = { version = "0.7" }
+chromiumoxide = { version = "0.8", features = ["tokio-runtime", "bytes", "_fetcher-native-tokio"], default-features = false }
+chromiumoxide_cdp = { version = "0.8" }
+chromiumoxide_types = { version = "0.8" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

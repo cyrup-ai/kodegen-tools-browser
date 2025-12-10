@@ -197,10 +197,14 @@ pub async fn wait_for_results(page: &Page) -> Result<()> {
                 eprintln!("========== END HTML DEBUG ==========\n");
 
                 // Also save full HTML to file for inspection
-                if let Err(e) = tokio::fs::write("/tmp/search_page_debug.html", &html).await {
-                    eprintln!("Failed to write debug HTML to /tmp/search_page_debug.html: {e}");
+                let debug_path = kodegen_config::KodegenConfig::log_dir()
+                    .map(|d| d.join("web_search_debug.html"))
+                    .unwrap_or_else(|_| std::env::temp_dir().join("web_search_debug.html"));
+
+                if let Err(e) = tokio::fs::write(&debug_path, &html).await {
+                    eprintln!("Failed to write debug HTML to {}: {e}", debug_path.display());
                 } else {
-                    eprintln!("Full HTML saved to: /tmp/search_page_debug.html");
+                    eprintln!("Full HTML saved to: {}", debug_path.display());
                 }
 
                 return Err(anyhow!(
