@@ -194,7 +194,7 @@ impl Tool for BrowserNavigateTool {
         // Terminal summary (KODEGEN pattern: 2-line colored format)
         let summary = if redirected {
             format!(
-                "\x1b[36m󰖟 Navigate: {}\x1b[0m\n\
+                "\x1b[36mNavigate: {}\x1b[0m\n\
                   Redirected: {} → {} · Timeout: {}ms",
                 final_url,
                 requested_url,
@@ -203,7 +203,7 @@ impl Tool for BrowserNavigateTool {
             )
         } else {
             format!(
-                "\x1b[36m󰖟 Navigate: {}\x1b[0m\n\
+                "\x1b[36mNavigate: {}\x1b[0m\n\
                   Timeout: {}ms",
                 final_url,
                 timeout_ms

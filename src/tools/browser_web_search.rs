@@ -79,7 +79,7 @@ impl Tool for BrowserWebSearchTool {
         // Terminal summary
         let summary = if results.results.is_empty() {
             format!(
-                "\x1b[36m󰋱 Web Search: {}\x1b[0m\n 󰈙 Results: 0 · Top: none",
+                "\x1b[36mWeb Search: {}\x1b[0m\n Results: 0 · Top: none",
                 results.query
             )
         } else {
@@ -87,7 +87,7 @@ impl Tool for BrowserWebSearchTool {
                 .map_or("none", |r| r.title.as_str());
 
             format!(
-                "\x1b[36m󰋱 Web Search: {}\x1b[0m\n 󰈙 Results: {} · Top: {}",
+                "\x1b[36mWeb Search: {}\x1b[0m\n Results: {} · Top: {}",
                 results.query,
                 results.results.len(),
                 first_title

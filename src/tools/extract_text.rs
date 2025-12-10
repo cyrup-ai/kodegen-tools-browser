@@ -163,7 +163,7 @@ impl Tool for BrowserExtractTextTool {
         };
 
         let summary = format!(
-            "\x1b[36m󰈙 Extract Text: {}\x1b[0m\n 󰋗 Characters: {} · Preview: {}",
+            "\x1b[36mExtract Text: {}\x1b[0m\n Characters: {} · Preview: {}",
             selector_display,
             text_len,
             preview

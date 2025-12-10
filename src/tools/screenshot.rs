@@ -160,7 +160,7 @@ impl Tool for BrowserScreenshotTool {
         };
 
         let summary = format!(
-            "\x1b[36m󰄀 Screenshot: {}\x1b[0m\n 󰈙 Format: {} · Size: {}x{}",
+            "\x1b[36mScreenshot: {}\x1b[0m\n Format: {} · Size: {}x{}",
             target,
             format_str.to_uppercase(),
             viewport_width,
