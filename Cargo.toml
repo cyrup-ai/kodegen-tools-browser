@@ -1,6 +1,6 @@
 [package]
 name = "kodegen_tools_browser"
-version = "0.10.5"
+version = "0.10.6"
 edition = "2024"
 description = "KODEGEN.ᴀɪ: Memory-efficient, Blazing-Fast, MCP tools for code generation agents."
 authors = ["KODEGEN.ᴀɪ"]
@@ -107,6 +107,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 cyrup_termcolor = "2"
 chrono = { version = "0.4", features = ["serde"] }
 http = "1"
+const_format = "0.2"
 
 [[bin]]
 name = "kodegen-browser"

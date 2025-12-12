@@ -18,12 +18,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Browser HTTP server configuration
-const HTTP_PORT: u16 = kodegen_config::PORT_BROWSER;
+const HTTP_PORT: u16 = kodegen_config::PORT_BROWSER - 10000;
 const BINARY_NAME: &str = "kodegen-browser";
 const PACKAGE_NAME: &str = "kodegen_tools_browser";
 
 /// HTTP server URL for browser examples
-const HTTP_URL: &str = const_format::formatcp!("http://127.0.0.1:{}/mcp", kodegen_config::PORT_BROWSER);
+const HTTP_URL: &str = const_format::formatcp!("http://127.0.0.1:{}/mcp", kodegen_config::PORT_BROWSER - 10000);
 
 /// Cached workspace root
 static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
