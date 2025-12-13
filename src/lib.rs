@@ -207,15 +207,18 @@ pub async fn start_server_with_listener(
     use kodegen_server_http::{ServerBuilder, Managers, RouterSet, register_tool};
     use rmcp::handler::server::router::{prompt::PromptRouter, tool::ToolRouter};
 
+    // Get the actual port from the listener for loopback URL
+    let actual_port = listener.local_addr()?.port();
+
     let mut builder = ServerBuilder::new()
         .category(kodegen_config::CATEGORY_BROWSER)
-        .register_tools(|| async {
+        .register_tools(move || async move {
             let mut tool_router = ToolRouter::new();
             let mut prompt_router = PromptRouter::new();
             let managers = Managers::new();
 
-            // Fixed server URL for loopback tools
-            let server_url = format!("http://127.0.0.1:{}/mcp", kodegen_config::PORT_BROWSER);
+            // Use actual listener port for loopback tools (not hardcoded PORT_BROWSER)
+            let server_url = format!("http://127.0.0.1:{}/mcp", actual_port);
 
             // Initialize browser manager (global singleton)
             let browser_manager = crate::BrowserManager::global();

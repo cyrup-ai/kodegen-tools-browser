@@ -1,5 +1,6 @@
 //! Browser click tool - clicks elements by CSS selector
 
+use chromiumoxide::Page;
 use kodegen_mcp_schema::browser::{
     BrowserClickArgs, BrowserClickOutput, BROWSER_CLICK,
     ClickPrompts,
@@ -9,6 +10,88 @@ use std::sync::Arc;
 
 use crate::manager::BrowserManager;
 use crate::utils::validate_interaction_timeout;
+
+/// Query the page for clickable elements and format as hints
+/// 
+/// This helps the agent learn what selectors are actually available
+/// when its guess fails.
+async fn get_clickable_element_hints(page: &Page) -> String {
+    // Try to find clickable elements
+    let clickables = match page.find_elements("button, a, [role='button'], input[type='submit'], input[type='button']").await {
+        Ok(elements) => elements,
+        Err(_) => return String::new(),
+    };
+    
+    if clickables.is_empty() {
+        return "No clickable elements found on page.".to_string();
+    }
+    
+    let mut hints = Vec::new();
+    for (i, el) in clickables.iter().take(15).enumerate() {
+        // Try to get identifying attributes
+        let id = el.attribute("id").await.ok().flatten();
+        let name = el.attribute("name").await.ok().flatten();
+        let class = el.attribute("class").await.ok().flatten();
+        let text = el.inner_text().await.ok().flatten();
+        let href = el.attribute("href").await.ok().flatten();
+        let role = el.attribute("role").await.ok().flatten();
+        // Get tag name via JavaScript since chromiumoxide Element doesn't expose it directly
+        let tag: Option<String> = el.call_js_fn("function() { return this.tagName; }", false)
+            .await
+            .ok()
+            .and_then(|v| v.result.value)
+            .and_then(|val| val.as_str().map(|s| s.to_lowercase()));
+        
+        let mut selector_hints = Vec::new();
+        
+        if let Some(id) = &id
+            && !id.is_empty() {
+            selector_hints.push(format!("#{}", id));
+        }
+        if let Some(name) = &name
+            && !name.is_empty() {
+            selector_hints.push(format!("[name='{}']", name));
+        }
+        
+        // Build description
+        let tag_str = tag.unwrap_or_else(|| "element".to_string());
+        let text_preview = text.map(|t| {
+            let trimmed = t.trim();
+            if trimmed.len() > 20 {
+                format!(" \"{}...\"", &trimmed[..20])
+            } else if !trimmed.is_empty() {
+                format!(" \"{}\"", trimmed)
+            } else {
+                String::new()
+            }
+        }).unwrap_or_default();
+        let href_preview = href.map(|h| format!(" href=\"{}\"", if h.len() > 30 { &h[..30] } else { &h })).unwrap_or_default();
+        let role_str = role.map(|r| format!(" role={}", r)).unwrap_or_default();
+        let class_preview = class.map(|c| {
+            let first_class = c.split_whitespace().next().unwrap_or("");
+            if first_class.is_empty() { String::new() } else { format!(" .{}", first_class) }
+        }).unwrap_or_default();
+        
+        if !selector_hints.is_empty() {
+            hints.push(format!(
+                "  {}. <{}{}{}{}{}> → {}",
+                i + 1,
+                tag_str,
+                text_preview,
+                href_preview,
+                role_str,
+                class_preview,
+                selector_hints.join(" or ")
+            ));
+        }
+    }
+    
+    if hints.is_empty() {
+        return "Clickable elements found but no usable selectors (missing id/name attributes).".to_string();
+    }
+    
+    format!("Available clickable elements:\n{}", hints.join("\n"))
+}
 
 #[derive(Clone)]
 pub struct BrowserClickTool {
@@ -72,7 +155,24 @@ impl Tool for BrowserClickTool {
 
         // Find element with polling (waits for SPAs to render)
         let timeout = validate_interaction_timeout(args.timeout_ms, 5000)?;
-        let element = crate::utils::wait_for_element(&page, &args.selector, timeout).await?;
+        let element = match crate::utils::wait_for_element(&page, &args.selector, timeout).await {
+            Ok(el) => el,
+            Err(e) => {
+                // Element not found - get DOM hints to help the agent try a better selector
+                let hints = get_clickable_element_hints(&page).await;
+                let hint_section = if hints.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n\n{}", hints)
+                };
+                return Err(McpError::Other(anyhow::anyhow!(
+                    "Element not found for selector '{}'. {}{}",
+                    args.selector,
+                    e,
+                    hint_section
+                )));
+            }
+        };
 
         // Scroll element into view to ensure it's visible (pattern from chromiumoxide element.rs:269)
         element.scroll_into_view().await.map_err(|e| {

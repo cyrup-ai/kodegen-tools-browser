@@ -1,5 +1,6 @@
 //! Browser type text tool - inputs text into form fields
 
+use chromiumoxide::Page;
 use kodegen_mcp_schema::browser::{
     BrowserTypeTextArgs, BrowserTypeOutput, BROWSER_TYPE_TEXT,
     TypeTextPrompts,
@@ -9,6 +10,68 @@ use std::sync::Arc;
 
 use crate::manager::BrowserManager;
 use crate::utils::validate_interaction_timeout;
+
+/// Query the page for available input elements and format as hints
+/// 
+/// This helps the agent learn what selectors are actually available
+/// when its guess fails.
+async fn get_input_element_hints(page: &Page) -> String {
+    // Try to find input elements
+    let inputs = match page.find_elements("input, textarea, [contenteditable='true']").await {
+        Ok(elements) => elements,
+        Err(_) => return String::new(),
+    };
+    
+    if inputs.is_empty() {
+        return "No input elements found on page.".to_string();
+    }
+    
+    let mut hints = Vec::new();
+    for (i, el) in inputs.iter().take(10).enumerate() {
+        // Try to get identifying attributes
+        let id = el.attribute("id").await.ok().flatten();
+        let name = el.attribute("name").await.ok().flatten();
+        let class = el.attribute("class").await.ok().flatten();
+        let placeholder = el.attribute("placeholder").await.ok().flatten();
+        let input_type = el.attribute("type").await.ok().flatten();
+        
+        let mut selector_hints = Vec::new();
+        
+        if let Some(id) = id
+            && !id.is_empty() {
+            selector_hints.push(format!("#{}", id));
+        }
+        if let Some(name) = name
+            && !name.is_empty() {
+            selector_hints.push(format!("input[name='{}']", name));
+        }
+        
+        // Build description
+        let type_str = input_type.unwrap_or_else(|| "text".to_string());
+        let placeholder_str = placeholder.map(|p| format!(" placeholder=\"{}\"", p)).unwrap_or_default();
+        let class_preview = class.map(|c| {
+            let first_class = c.split_whitespace().next().unwrap_or("");
+            if first_class.is_empty() { String::new() } else { format!(" .{}", first_class) }
+        }).unwrap_or_default();
+        
+        if !selector_hints.is_empty() {
+            hints.push(format!(
+                "  {}. [{}{}{}] → {}",
+                i + 1,
+                type_str,
+                placeholder_str,
+                class_preview,
+                selector_hints.join(" or ")
+            ));
+        }
+    }
+    
+    if hints.is_empty() {
+        return "Input elements found but no usable selectors (missing id/name attributes).".to_string();
+    }
+    
+    format!("Available input elements:\n{}", hints.join("\n"))
+}
 
 #[derive(Clone)]
 pub struct BrowserTypeTextTool {
@@ -72,7 +135,24 @@ impl Tool for BrowserTypeTextTool {
 
         // Find element with polling (waits for SPAs to render)
         let timeout = validate_interaction_timeout(args.timeout_ms, 5000)?;
-        let element = crate::utils::wait_for_element(&page, &args.selector, timeout).await?;
+        let element = match crate::utils::wait_for_element(&page, &args.selector, timeout).await {
+            Ok(el) => el,
+            Err(e) => {
+                // Element not found - get DOM hints to help the agent try a better selector
+                let hints = get_input_element_hints(&page).await;
+                let hint_section = if hints.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n\n{}", hints)
+                };
+                return Err(McpError::Other(anyhow::anyhow!(
+                    "Element not found for selector '{}'. {}{}",
+                    args.selector,
+                    e,
+                    hint_section
+                )));
+            }
+        };
 
         // Scroll element into view to ensure it's visible (pattern from chromiumoxide element.rs:269)
         element.scroll_into_view().await.map_err(|e| {

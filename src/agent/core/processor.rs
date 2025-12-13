@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use tracing::warn;
 use kodegen_mcp_client::KodegenClient;
 
-use crate::agent::{AgentError, AgentOutput, AgentResult, prompts::{AgentMessagePrompt, SystemPrompt}};
+use crate::agent::{ActionResult, AgentError, AgentOutput, AgentResult, prompts::{AgentMessagePrompt, SystemPrompt}};
 use crate::utils::AgentState;
 
 /// Shared agent state and processing logic (can be Arc-cloned)
@@ -19,6 +19,8 @@ pub(super) struct AgentInner {
     pub(super) max_tokens: u64,
     pub(super) vision_timeout_secs: u64,
     pub(super) llm_timeout_secs: u64,
+    /// Results from the previous step's actions - fed back to LLM for learning
+    pub(super) previous_action_results: Mutex<Vec<ActionResult>>,
 }
 
 /// Core processing logic
@@ -32,14 +34,27 @@ impl AgentInner {
         }
         drop(agent_state);
 
+        // Get previous action results for feedback to LLM
+        let previous_results = {
+            let guard = self.previous_action_results.lock().await;
+            guard.clone()
+        };
+
         // Get current browser state (with screenshot)
         let mut browser_state = self.get_browser_state().await?;
 
         // Generate agent actions using CandleFluentAi LLM (with vision analysis if screenshot available)
-        let llm_response = self.generate_actions_with_llm(&mut browser_state).await?;
+        // Now includes previous action results so LLM can learn from failures
+        let llm_response = self.generate_actions_with_llm(&mut browser_state, &previous_results).await?;
 
         // Execute actions via MCP hot path
-        let (_action_results, errors) = self.execute_actions(llm_response.action.clone()).await?;
+        let (action_results, errors) = self.execute_actions(llm_response.action.clone()).await?;
+
+        // Store action results for next step's feedback loop
+        {
+            let mut guard = self.previous_action_results.lock().await;
+            *guard = action_results;
+        }
 
         // Log errors if any
         if !errors.is_empty() {

@@ -3,22 +3,61 @@ use tokio_stream::StreamExt;
 use tracing::{debug, warn};
 use kodegen_candle_agent::prelude::*;
 
-use crate::agent::{AgentError, AgentLLMResponse, AgentResult};
+use crate::agent::{ActionResult, AgentError, AgentLLMResponse, AgentResult};
 use super::processor::AgentInner;
 use super::browser_state::BrowserStateWithScreenshot;
+
+/// Format previous action results for LLM feedback
+/// 
+/// This is critical for the agent's learning loop - the LLM needs to know
+/// what worked and what failed so it can adapt its strategy.
+fn format_previous_results(results: &[ActionResult]) -> String {
+    if results.is_empty() {
+        return String::new();
+    }
+    
+    let mut output = String::from("\n## Previous Step Results\n");
+    output.push_str("Learn from these results to improve your next actions:\n\n");
+    
+    for result in results {
+        let status = if result.success { "✓ SUCCESS" } else { "✗ FAILED" };
+        output.push_str(&format!("- {}({}): {}\n", result.action, status, 
+            if result.success {
+                result.extracted_content.as_deref().unwrap_or("completed")
+            } else {
+                result.error.as_deref().unwrap_or("unknown error")
+            }
+        ));
+    }
+    
+    // Add guidance for failures
+    let has_failures = results.iter().any(|r| !r.success);
+    if has_failures {
+        output.push_str("\n⚠️ Some actions failed. Check the error messages above for hints about available elements.\n");
+    }
+    
+    output
+}
 
 /// LLM integration implementation
 impl AgentInner {
     /// Generate actions using CandleFluentAi LLM
     ///
-    /// Combines system prompt, task description, and browser state into a query,
-    /// then streams the LLM response and parses actions from it.
+    /// Combines system prompt, task description, browser state, and previous action
+    /// results into a query, then streams the LLM response and parses actions from it.
+    /// 
+    /// The `previous_results` parameter enables the feedback loop - the LLM learns
+    /// from what worked and what failed in the previous step.
     pub(super) async fn generate_actions_with_llm(
         &self,
         browser_state: &mut BrowserStateWithScreenshot,
+        previous_results: &[ActionResult],
     ) -> AgentResult<AgentLLMResponse> {
         // Build browser state message with vision analysis
         let browser_state_msg = self.format_browser_state_with_vision(browser_state).await?;
+        
+        // Format previous action results for feedback (critical for learning!)
+        let previous_results_msg = format_previous_results(previous_results);
 
         // Build system prompt with available actions
         let actions_description = r##"Available Actions:
@@ -44,9 +83,17 @@ You must respond with valid JSON matching the AgentLLMResponse schema with an 'a
 
         // Build user query using AgentMessagePrompt (CRITICAL: integrates agent_prompt field)
         // This provides protocol-compliant instructions and proper context formatting
-        let user_query =
+        let base_query =
             self.agent_prompt
                 .build_message_prompt(&browser_state_msg, &self.task, &self.add_infos);
+        
+        // Append previous action results for feedback loop
+        // This enables the LLM to learn from failures and adapt its strategy
+        let user_query = if previous_results_msg.is_empty() {
+            base_query
+        } else {
+            format!("{}\n{}", base_query, previous_results_msg)
+        };
 
         // Stream LLM response with timeout protection
         let llm_timeout = Duration::from_secs(self.llm_timeout_secs);

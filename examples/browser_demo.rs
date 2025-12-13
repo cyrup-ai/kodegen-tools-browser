@@ -59,19 +59,19 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
             BROWSER_NAVIGATE,
             json!({
                 "url": "https://docs.rs",
-                "wait_for_selector": "#search"
+                "wait_for_selector": "input[name=\"q\"]"
             }),
         )
         .await?;
     info!("   ✓ Navigated to docs.rs\n");
 
-    // Step 2: Type search query (input is autofocused, no need to click)
+    // Step 2: Type search query
     info!("2️⃣  browser_type_text → \"async\"");
     client
         .call_tool(
-            kodegen_config::BROWSER_TYPE_TEXT,
+            BROWSER_TYPE_TEXT,
             json!({
-                "selector": "#search",
+                "selector": "input[name=\"q\"]",
                 "text": "async"
             }),
         )
@@ -82,9 +82,9 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("3️⃣  browser_click → Submit button");
     client
         .call_tool(
-            kodegen_config::BROWSER_CLICK,
+            BROWSER_CLICK,
             json!({
-                "selector": "button[type=\"submit\"], .search-button, form button",
+                "selector": "button[type=\"submit\"]",
                 "wait_for_navigation": true
             }),
         )
@@ -93,12 +93,17 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
 
     // Step 4: Extract search results
     info!("4️⃣  browser_extract_text → Search results");
-    let result = client.call_tool(kodegen_config::BROWSER_EXTRACT_TEXT, json!({})).await?;
+    let result = client.call_tool(BROWSER_EXTRACT_TEXT, json!({})).await?;
 
-    if let Some(content) = result.content.first()
-        && let Some(text) = content.as_text()
-    {
-        let response: serde_json::Value = serde_json::from_str(&text.text)?;
+    // Content layout: [0]=branded line, [1]=display, [2]=JSON metadata
+    // Or without branding: [0]=display, [1]=JSON metadata
+    // Find the JSON metadata by trying to parse each content item
+    let response: Option<serde_json::Value> = result.content.iter().rev().find_map(|c| {
+        c.as_text()
+            .and_then(|t| serde_json::from_str(&t.text).ok())
+    });
+
+    if let Some(response) = response {
         let extracted = response.get("text").and_then(|v| v.as_str()).unwrap_or("");
         let preview = if extracted.len() > 200 {
             format!("{}...", &extracted[..200])
@@ -113,7 +118,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("5️⃣  browser_scroll → Scroll down 500px");
     client
         .call_tool(
-            kodegen_config::BROWSER_SCROLL,
+            BROWSER_SCROLL,
             json!({
                 "y": 500
             }),
@@ -125,17 +130,22 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("6️⃣  browser_screenshot → Capture results");
     let result = client
         .call_tool(
-            kodegen_config::BROWSER_SCREENSHOT,
+            BROWSER_SCREENSHOT,
             json!({
                 "format": "png"
             }),
         )
         .await?;
 
-    if let Some(content) = result.content.first()
-        && let Some(text) = content.as_text()
-    {
-        let response: serde_json::Value = serde_json::from_str(&text.text)?;
+    // Content layout: [0]=branded line, [1]=display, [2]=JSON metadata
+    // Or without branding: [0]=display, [1]=JSON metadata
+    // Find the JSON metadata by trying to parse each content item
+    let response: Option<serde_json::Value> = result.content.iter().rev().find_map(|c| {
+        c.as_text()
+            .and_then(|t| serde_json::from_str(&t.text).ok())
+    });
+
+    if let Some(response) = response {
         let size = response
             .get("size_bytes")
             .and_then(|v| v.as_u64())
@@ -161,10 +171,15 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
         )
         .await?;
 
-    if let Some(content) = result.content.first()
-        && let Some(text) = content.as_text()
-    {
-        let response: serde_json::Value = serde_json::from_str(&text.text)?;
+    // Content layout: [0]=branded line, [1]=display, [2]=JSON metadata
+    // Or without branding: [0]=display, [1]=JSON metadata
+    // Find the JSON metadata by trying to parse each content item
+    let response: Option<serde_json::Value> = result.content.iter().rev().find_map(|c| {
+        c.as_text()
+            .and_then(|t| serde_json::from_str(&t.text).ok())
+    });
+
+    if let Some(response) = response {
         let result_count = response
             .get("result_count")
             .and_then(|v| v.as_u64())
@@ -184,53 +199,53 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("");
 
     // ========================================================================
-    // Workflow 3: AI-Powered Research - Async Session Pattern (3 tools)
+    // Workflow 3: AI-Powered Research - Action-based API
     // ========================================================================
     info!("\n╔══════════════════════════════════════════════════════════╗");
-    info!("║ Workflow 3: AI-Powered Deep Research (Async)            ║");
-    info!("║ Tools: start_browser_research, get_research_status,     ║");
-    info!("║        get_research_result                               ║");
+    info!("║ Workflow 3: AI-Powered Deep Research                    ║");
+    info!("║ Tool: browser_research (action: RESEARCH/READ/LIST/KILL)║");
     info!("╚══════════════════════════════════════════════════════════╝\n");
 
-    info!("9️⃣  start_browser_research → \"precedent setting USA Antitrust cases\"");
+    info!("9️⃣  browser_research RESEARCH → \"Rust async programming best practices\"");
     info!("   (Starts background research session)\n");
 
+    // Start research with short timeout to return immediately
     let start_result = client
         .call_tool(
-            "start_browser_research",
+            "browser_research",
             json!({
-                "query": "precedent setting USA Antitrust cases",
-                "max_pages": 5
+                "action": "RESEARCH",
+                "query": "Rust async programming best practices",
+                "max_pages": 3,
+                "session": 0,
+                "await_completion_ms": 0  // Fire-and-forget, return immediately
             }),
         )
         .await?;
 
-    let session_id = if let Some(content) = start_result.content.first()
+    if let Some(content) = start_result.content.first()
         && let Some(text) = content.as_text()
     {
         let response: serde_json::Value = serde_json::from_str(&text.text)?;
-        response.get("session_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("No session_id in response"))?
-            .to_string()
-    } else {
-        return Err(anyhow::anyhow!("Invalid start_browser_research response"));
-    };
+        let session = response.get("session").and_then(|v| v.as_u64()).unwrap_or(0);
+        let status = response.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+        info!("   ✓ Research session {} started (status: {})", session, status);
+    }
+    
+    info!("   ⏳ Polling for completion...\n");
 
-    info!("   ✓ Research session started: {}", session_id);
-    info!("   ⏳ Polling for completion (this takes 2-5 minutes)...\n");
-
-    // Poll for completion
+    // Poll for completion using READ action
     let mut poll_count = 0;
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         poll_count += 1;
 
         let status_result = client
             .call_tool(
-                "get_research_status",
+                "browser_research",
                 json!({
-                    "session_id": session_id
+                    "action": "READ",
+                    "session": 0
                 }),
             )
             .await?;
@@ -238,59 +253,48 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
         if let Some(content) = status_result.content.first()
             && let Some(text) = content.as_text()
         {
-            let status: serde_json::Value = serde_json::from_str(&text.text)?;
-            let state = status.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let response: serde_json::Value = serde_json::from_str(&text.text)?;
+            let status = response.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let pages = response.get("pages_analyzed").and_then(|v| v.as_u64()).unwrap_or(0);
+            let completed = response.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
 
-            info!("   [{:02}] Status: {} ({}s elapsed)", poll_count, state, poll_count * 10);
+            info!("   [{:02}] Status: {} | Pages: {} ({}s elapsed)", 
+                poll_count, status, pages, poll_count * 5);
 
-            if state == "completed" {
+            if completed {
                 info!("   ✓ Research complete!\n");
+                
+                // Show results
+                if let Some(summary) = response.get("summary").and_then(|v| v.as_str()) {
+                    info!("   ✓ AI Research Summary:");
+                    let preview = if summary.len() > 500 {
+                        format!("{}...", &summary[..500])
+                    } else {
+                        summary.to_string()
+                    };
+                    info!("\n{}\n", preview);
+                }
+
+                if let Some(sources) = response.get("sources").and_then(|v| v.as_array()) {
+                    info!("   📚 Sources ({} pages):", sources.len());
+                    for (i, source) in sources.iter().enumerate().take(5) {
+                        let url = source.get("url").and_then(|v| v.as_str()).unwrap_or("Unknown");
+                        let title = source.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+                        info!("   {}. {} - {}", i + 1, title, url);
+                    }
+                }
                 break;
-            } else if state == "failed" {
-                let error = status.get("error").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+            }
+            
+            // Check for error
+            if let Some(error) = response.get("error").and_then(|v| v.as_str()) {
                 return Err(anyhow::anyhow!("Research failed: {}", error));
             }
         }
 
-        // Safety timeout: 30 minutes max
-        if poll_count >= 180 {
-            return Err(anyhow::anyhow!("Research session timed out after 30 minutes"));
-        }
-    }
-
-    // Get final results
-    let result = client
-        .call_tool(
-            "get_research_result",
-            json!({
-                "session_id": session_id
-            }),
-        )
-        .await?;
-
-    if let Some(content) = result.content.first()
-        && let Some(text) = content.as_text()
-    {
-        let response: serde_json::Value = serde_json::from_str(&text.text)?;
-
-        if let Some(summary) = response.get("comprehensive_summary").and_then(|v| v.as_str()) {
-            info!("   ✓ AI Research Report:");
-            // Show first 500 chars of summary
-            let preview = if summary.len() > 500 {
-                format!("{}...", &summary[..500])
-            } else {
-                summary.to_string()
-            };
-            info!("\n{}\n", preview);
-        }
-
-        if let Some(sources) = response.get("sources").and_then(|v| v.as_array()) {
-            info!("   📚 Sources ({} pages):", sources.len());
-            for (i, source) in sources.iter().enumerate().take(5) {
-                if let Some(url) = source.as_str() {
-                    info!("   {}. {}", i + 1, url);
-                }
-            }
+        // Safety timeout: 5 minutes max
+        if poll_count >= 60 {
+            return Err(anyhow::anyhow!("Research session timed out after 5 minutes"));
         }
     }
     info!("");
@@ -308,8 +312,9 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
 
     let result = client
         .call_tool(
-            kodegen_config::BROWSER_AGENT,
+            BROWSER_AGENT,
             json!({
+                "action": "PROMPT",
                 "task": "Compare axum vs actix-web crates on crates.io - find downloads, latest version, and key features for each",
                 "start_url": "https://crates.io",
                 "max_steps": 10,
@@ -318,31 +323,53 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
         )
         .await?;
 
-    if let Some(content) = result.content.first()
-        && let Some(text) = content.as_text()
-    {
-        let response: serde_json::Value = serde_json::from_str(&text.text)?;
-
-        let success = response.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
-        let steps_taken = response.get("steps_taken").and_then(|v| v.as_u64()).unwrap_or(0);
-
-        info!("   {} Agent completed in {} steps",
-            if success { "✓" } else { "⚠" },
-            steps_taken
-        );
-
-        if let Some(final_result) = response.get("final_result").and_then(|v| v.as_str()) {
-            info!("\n   Result:\n{}\n", final_result);
+    // DEBUG: Print raw response content
+    info!("   DEBUG: Response has {} content items", result.content.len());
+    for (i, content) in result.content.iter().enumerate() {
+        if let Some(text) = content.as_text() {
+            let preview = if text.text.len() > 200 {
+                format!("{}...", &text.text[..200])
+            } else {
+                text.text.clone()
+            };
+            info!("   DEBUG: content[{}] = {}", i, preview);
+        } else {
+            info!("   DEBUG: content[{}] = <non-text>", i);
         }
+    }
 
-        if let Some(actions) = response.get("actions").and_then(|v| v.as_array()) {
-            info!("   Actions taken:");
-            for action in actions {
-                if let Some(step) = action.get("step").and_then(|v| v.as_u64())
-                    && let Some(summary) = action.get("summary").and_then(|v| v.as_str())
-                {
-                    info!("   Step {}: {}", step, summary);
-                }
+    // Content layout: [0]=branded line, [1]=display, [2]=JSON metadata
+    // Or without branding: [0]=display, [1]=JSON metadata
+    // Find the JSON metadata by trying to parse each content item
+    let response: Option<serde_json::Value> = result.content.iter().rev().find_map(|c| {
+        c.as_text()
+            .and_then(|t| serde_json::from_str(&t.text).ok())
+    });
+
+    if response.is_none() {
+        return Err(anyhow::anyhow!("No JSON metadata found in response"));
+    }
+    let response = response.unwrap();
+
+    let completed = response.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
+    let steps_taken = response.get("steps_taken").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    info!("   {} Agent completed in {} steps",
+        if completed { "✓" } else { "⚠" },
+        steps_taken
+    );
+
+    if let Some(summary) = response.get("summary").and_then(|v| v.as_str()) {
+        info!("\n   Result:\n{}\n", summary);
+    }
+
+    if let Some(history) = response.get("history").and_then(|v| v.as_array()) {
+        info!("   History:");
+        for entry in history {
+            if let Some(step) = entry.get("step").and_then(|v| v.as_u64())
+                && let Some(step_summary) = entry.get("summary").and_then(|v| v.as_str())
+            {
+                info!("   Step {}: {}", step, step_summary);
             }
         }
     }

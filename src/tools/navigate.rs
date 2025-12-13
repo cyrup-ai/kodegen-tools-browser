@@ -47,6 +47,8 @@ impl BrowserNavigateTool {
     /// 
     /// Used by deep_research to capture specific page in parallel execution.
     /// External MCP callers use execute() which discards Page handle.
+    /// 
+    /// Callers are responsible for closing the returned Page when done.
     pub(crate) async fn navigate_and_capture_page(
         &self,
         args: BrowserNavigateArgs,
@@ -72,21 +74,8 @@ impl BrowserNavigateTool {
             ))
         })?;
 
-        // Close all existing pages to enforce single-page model
-        // Prevents non-deterministic page selection in get_current_page()
-        if let Ok(existing_pages) = wrapper.browser().pages().await {
-            for page in existing_pages {
-                // Log errors but continue - pages might already be closed or unresponsive
-                if let Err(e) = page.close().await {
-                    tracing::warn!(
-                        "Failed to close page during cleanup (may already be closed): {}",
-                        e
-                    );
-                }
-            }
-        }
-
-        // Create new blank page (now guaranteed to be the ONLY page)
+        // Create new blank page for this navigation
+        // Callers are responsible for closing the page when done (RAII pattern)
         let page = crate::browser::create_blank_page(wrapper)
             .await
             .map_err(McpError::Other)?;

@@ -54,6 +54,7 @@ impl Agent {
             max_tokens: config.max_tokens,
             vision_timeout_secs: config.vision_timeout_secs,
             llm_timeout_secs: config.llm_timeout_secs,
+            previous_action_results: Mutex::new(Vec::new()),
         });
 
         // Spawn processor with Arc-cloned inner and store handle

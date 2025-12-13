@@ -25,15 +25,23 @@ impl ShutdownHook for BrowserManagerWrapper {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Parse actual port from CLI args (--http host:port) for loopback URL
+    let actual_port = std::env::args()
+        .skip_while(|arg| arg != "--http")
+        .nth(1)
+        .and_then(|addr| addr.split(':').next_back().map(|s| s.to_string()))
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(kodegen_config::PORT_BROWSER);
+
     ServerBuilder::new()
         .category(CATEGORY_BROWSER)
-        .register_tools(|| async {
+        .register_tools(move || async move {
             let mut tool_router = ToolRouter::new();
             let mut prompt_router = PromptRouter::new();
             let managers = Managers::new();
 
-            // Fixed server URL for browser loopback tools (port managed by daemon)
-            let server_url = format!("http://127.0.0.1:{}/mcp", kodegen_config::PORT_BROWSER);
+            // Use actual port from CLI for loopback (not hardcoded PORT_BROWSER)
+            let server_url = format!("http://127.0.0.1:{}/mcp", actual_port);
 
             // Initialize browser manager (global singleton)
             let browser_manager = kodegen_tools_browser::BrowserManager::global();
