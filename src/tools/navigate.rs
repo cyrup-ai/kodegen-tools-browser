@@ -74,11 +74,17 @@ impl BrowserNavigateTool {
             ))
         })?;
 
-        // Create new blank page for this navigation
-        // Callers are responsible for closing the page when done (RAII pattern)
-        let page = crate::browser::create_blank_page(wrapper)
-            .await
-            .map_err(McpError::Other)?;
+        // Get or create a page for navigation
+        // Reuse existing page if available to maintain state across tool calls
+        let page = match crate::browser::get_current_page(wrapper).await {
+            Ok(existing_page) => existing_page,
+            Err(_) => {
+                // No page exists, create a new one
+                crate::browser::create_blank_page(wrapper)
+                    .await
+                    .map_err(McpError::Other)?
+            }
+        };
 
         // Navigate to URL
         let timeout = validate_navigation_timeout(args.timeout_ms, 30000)?;
@@ -207,10 +213,9 @@ impl Tool for BrowserNavigateTool {
             status_code: None,
         };
 
-        // CRITICAL FIX: Close page before returning to prevent memory leak
-        if let Err(e) = page.close().await {
-            tracing::warn!("Failed to close navigation page: {}", e);
-        }
+        // Store page in manager so other tools (type_text, click, etc.) can access it
+        // This replaces any previous page, which gets automatically dropped/closed
+        self.manager.set_current_page(page).await;
 
         Ok(ToolResponse::new(summary, output))
     }

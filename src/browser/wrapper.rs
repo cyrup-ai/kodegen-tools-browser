@@ -171,6 +171,6 @@ pub async fn get_current_page(wrapper: &BrowserWrapper) -> Result<Page> {
 
     pages
         .into_iter()
-        .next()
+        .last()
         .ok_or_else(|| anyhow::anyhow!("No page loaded. Call browser_navigate first."))
 }

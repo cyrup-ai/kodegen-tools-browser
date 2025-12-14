@@ -21,6 +21,7 @@
 //! Reference: packages/tools-citescrape/src/web_search/manager.rs
 
 use anyhow::Result;
+use chromiumoxide::page::Page;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 use tracing::info;
@@ -59,6 +60,7 @@ static GLOBAL_MANAGER: OnceLock<Arc<BrowserManager>> = OnceLock::new();
 /// Based on: packages/tools-citescrape/src/web_search/manager.rs:14-122
 pub struct BrowserManager {
     browser: Arc<Mutex<Option<BrowserWrapper>>>,
+    current_page: Arc<Mutex<Option<Page>>>,
 }
 
 impl BrowserManager {
@@ -97,6 +99,7 @@ impl BrowserManager {
     fn new() -> Self {
         Self {
             browser: Arc::new(Mutex::new(None)),
+            current_page: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -229,6 +232,23 @@ impl BrowserManager {
         }
 
         Ok(())
+    }
+
+    /// Get the current active page, if one exists
+    ///
+    /// Returns the page set by the most recent navigate() call.
+    /// Other browser tools (type_text, click, etc.) should use this
+    /// to get the page to interact with.
+    pub async fn get_current_page(&self) -> Option<Page> {
+        self.current_page.lock().await.clone()
+    }
+
+    /// Set the current active page
+    ///
+    /// Called by navigate() to store the page for other tools to use.
+    /// Replaces any previously stored page (which gets automatically dropped/closed).
+    pub async fn set_current_page(&self, page: Page) {
+        *self.current_page.lock().await = Some(page);
     }
 
     /// Check if browser is currently running

@@ -109,27 +109,14 @@ impl Tool for BrowserTypeTextTool {
             return Err(McpError::invalid_arguments("Selector cannot be empty"));
         }
 
-        // Get or create browser instance
-        let browser_arc = self
+        // Get current page from manager (set by browser_navigate)
+        let page = self
             .manager
-            .get_or_launch()
+            .get_current_page()
             .await
-            .map_err(|e| McpError::Other(anyhow::anyhow!("Browser error: {}", e)))?;
-
-        let browser_guard = browser_arc.lock().await;
-        let wrapper = browser_guard.as_ref().ok_or_else(|| {
-            McpError::Other(anyhow::anyhow!(
-                "Browser not available. This is an internal error - please report it."
-            ))
-        })?;
-
-        // Get current page (must call browser_navigate first)
-        let page = crate::browser::get_current_page(wrapper)
-            .await
-            .map_err(|e| {
+            .ok_or_else(|| {
                 McpError::Other(anyhow::anyhow!(
-                    "Failed to get page. Did you call browser_navigate first? Error: {}",
-                    e
+                    "No page available. You must call browser_navigate first to load a page."
                 ))
             })?;
 

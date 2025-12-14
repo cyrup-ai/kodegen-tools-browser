@@ -59,7 +59,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
             BROWSER_NAVIGATE,
             json!({
                 "url": "https://docs.rs",
-                "wait_for_selector": "input[name=\"q\"]"
+                "wait_for_selector": "input[name=\"query\"]"
             }),
         )
         .await?;
@@ -71,7 +71,7 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
         .call_tool(
             BROWSER_TYPE_TEXT,
             json!({
-                "selector": "input[name=\"q\"]",
+                "selector": "input[name=\"query\"]",
                 "text": "async"
             }),
         )
