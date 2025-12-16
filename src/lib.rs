@@ -143,7 +143,6 @@ pub use manager::BrowserManager;
 pub use tools::{
     BrowserAgentTool, BrowserClickTool, BrowserExtractTextTool, BrowserNavigateTool,
     BrowserResearchTool, BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTextTool,
-    BrowserWebSearchTool,
 };
 
 // Shutdown hook wrappers
@@ -270,13 +269,6 @@ pub async fn start_server_with_listener(
                 tool_router,
                 prompt_router,
                 crate::BrowserResearchTool::new(browser_manager.clone()),
-            );
-
-            // Web search tool (1 tool)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                crate::BrowserWebSearchTool::new(),
             );
 
             Ok(RouterSet::new(tool_router, prompt_router, managers))

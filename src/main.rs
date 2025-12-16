@@ -100,13 +100,6 @@ async fn main() -> Result<()> {
                 browser_research_tool,
             );
 
-            // Web search tool (1 tool)
-            (tool_router, prompt_router) = register_tool(
-                tool_router,
-                prompt_router,
-                BrowserWebSearchTool::new(),
-            );
-
             // Create cleanup callback for connection dropped notification
             let cleanup: ConnectionCleanupFn = Arc::new(move |connection_id: String| {
                 let agent_reg = agent_registry.clone();

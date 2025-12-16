@@ -1,15 +1,14 @@
 //! Browser tools comprehensive demonstration
 //!
-//! Demonstrates all 9 public browser tools using real-world examples:
+//! Demonstrates all 8 public browser tools using real-world examples:
 //! - Workflow 1: docs.rs search (7 tools)
-//! - Workflow 2: Web search (1 tool)
-//! - Workflow 3: AI research (1 tool)
-//! - Workflow 4: Autonomous agent (1 tool)
+//! - Workflow 2: AI research (1 tool)
+//! - Workflow 3: Autonomous agent (1 tool)
 
 use anyhow::{Context, Result};
 use serde_json::json;
 use tracing::info;
-use kodegen_config::{BROWSER_AGENT, BROWSER_CLICK, BROWSER_EXTRACT_TEXT, BROWSER_NAVIGATE, BROWSER_SCREENSHOT, BROWSER_SCROLL, BROWSER_TYPE_TEXT, BROWSER_WEB_SEARCH};
+use kodegen_config::{BROWSER_AGENT, BROWSER_CLICK, BROWSER_EXTRACT_TEXT, BROWSER_NAVIGATE, BROWSER_SCREENSHOT, BROWSER_SCROLL, BROWSER_TYPE_TEXT};
 
 mod common;
 
@@ -154,59 +153,14 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     }
 
     // ========================================================================
-    // Workflow 2: Web Search - 1 Tool
+    // Workflow 2: AI-Powered Research - Action-based API
     // ========================================================================
     info!("\n╔══════════════════════════════════════════════════════════╗");
-    info!("║ Workflow 2: Web Search (DuckDuckGo)                     ║");
-    info!("║ Tool: web_search                                         ║");
-    info!("╚══════════════════════════════════════════════════════════╝\n");
-
-    info!("8️⃣  web_search → \"Rust MCP server examples\"");
-    let result = client
-        .call_tool(
-            BROWSER_WEB_SEARCH,
-            json!({
-                "query": "Rust MCP server examples"
-            }),
-        )
-        .await?;
-
-    // Content layout: [0]=branded line, [1]=display, [2]=JSON metadata
-    // Or without branding: [0]=display, [1]=JSON metadata
-    // Find the JSON metadata by trying to parse each content item
-    let response: Option<serde_json::Value> = result.content.iter().rev().find_map(|c| {
-        c.as_text()
-            .and_then(|t| serde_json::from_str(&t.text).ok())
-    });
-
-    if let Some(response) = response {
-        let result_count = response
-            .get("result_count")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-
-        info!("   ✓ Found {} search results", result_count);
-
-        if let Some(results) = response.get("results").and_then(|v| v.as_array()) {
-            info!("   Top 3 results:");
-            for (i, r) in results.iter().take(3).enumerate() {
-                let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                info!("   {}. {} - {}", i + 1, title, url);
-            }
-        }
-    }
-    info!("");
-
-    // ========================================================================
-    // Workflow 3: AI-Powered Research - Action-based API
-    // ========================================================================
-    info!("\n╔══════════════════════════════════════════════════════════╗");
-    info!("║ Workflow 3: AI-Powered Deep Research                    ║");
+    info!("║ Workflow 2: AI-Powered Deep Research                    ║");
     info!("║ Tool: browser_research (action: RESEARCH/READ/LIST/KILL)║");
     info!("╚══════════════════════════════════════════════════════════╝\n");
 
-    info!("9️⃣  browser_research RESEARCH → \"Rust async programming best practices\"");
+    info!("8️⃣  browser_research RESEARCH → \"Rust async programming best practices\"");
     info!("   (Starts background research session)\n");
 
     // Start research with short timeout to return immediately
@@ -300,14 +254,14 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     info!("");
 
     // ========================================================================
-    // Workflow 4: Autonomous Browser Agent - 1 Tool
+    // Workflow 3: Autonomous Browser Agent - 1 Tool
     // ========================================================================
     info!("\n╔══════════════════════════════════════════════════════════╗");
-    info!("║ Workflow 4: Autonomous AI Agent                         ║");
+    info!("║ Workflow 3: Autonomous AI Agent                         ║");
     info!("║ Tool: browser_agent                                      ║");
     info!("╚══════════════════════════════════════════════════════════╝\n");
 
-    info!("🔟  browser_agent → Compare axum vs actix-web");
+    info!("9️⃣  browser_agent → Compare axum vs actix-web");
     info!("   (AI autonomously navigates and extracts data)\n");
 
     let result = client
@@ -379,16 +333,15 @@ async fn run_all_workflows(client: &common::LoggingClient) -> Result<()> {
     // Summary
     // ========================================================================
     info!("\n╔══════════════════════════════════════════════════════════╗");
-    info!("║ ✅ All 9 Browser Tools Demonstrated                      ║");
+    info!("║ ✅ All 8 Browser Tools Demonstrated                      ║");
     info!("╠══════════════════════════════════════════════════════════╣");
     info!("║ Core Automation (6 tools):                              ║");
     info!("║   ✓ browser_navigate    ✓ browser_click                 ║");
     info!("║   ✓ browser_type_text   ✓ browser_extract_text          ║");
     info!("║   ✓ browser_scroll      ✓ browser_screenshot            ║");
     info!("║                                                          ║");
-    info!("║ Advanced Tools (3 tools):                               ║");
-    info!("║   ✓ web_search          ✓ browser_research              ║");
-    info!("║   ✓ browser_agent                                        ║");
+    info!("║ Advanced Tools (2 tools):                               ║");
+    info!("║   ✓ browser_research    ✓ browser_agent                 ║");
     info!("╚══════════════════════════════════════════════════════════╝\n");
 
     Ok(())
