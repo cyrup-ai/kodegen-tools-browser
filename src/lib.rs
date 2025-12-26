@@ -12,7 +12,6 @@ pub mod page_enhancer;
 pub mod page_extractor;
 mod tools;
 mod utils;
-pub mod web_search;
 
 use serde::{Deserialize, Serialize};
 use std::fs;

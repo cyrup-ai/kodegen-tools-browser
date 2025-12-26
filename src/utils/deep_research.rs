@@ -7,7 +7,7 @@ use kodegen_candle_agent::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 use tokio::task::JoinSet;
 use tokio::sync::Semaphore;
 
@@ -179,48 +179,32 @@ impl DeepResearch {
         Ok(())
     }
 
-    /// Search for query using web_search module directly
+    /// Search for query using web_search tool from citescrape package
     ///
-    /// Calls local web_search which provides DuckDuckGo search
-    /// with kromekover stealth, retries, and structured result parsing.
+    /// TODO: web_search was moved to kodegen-tools-citescrape package.
+    /// This needs to call the citescrape web_search tool via MCP/HTTP.
     ///
     /// # Arguments
     /// * `query` - Search query string
-    /// * `options` - Research options (currently unused, web_search has sensible defaults)
+    /// * `_options` - Research options (currently unused)
     ///
     /// # Returns
     /// Vector of URLs from search results (up to 10)
-    ///
-    /// # Direct Integration
-    /// This method calls web_search directly (same package) instead of via MCP.
-    /// Benefits:
-    /// - Faster (no IPC overhead)
-    /// - Simpler (no serialization/deserialization)
-    /// - More reliable (no network/process dependencies)
     async fn search_query(
         &self,
         query: &str,
         _options: &ResearchOptions,
     ) -> Result<Vec<String>, UtilsError> {
-        debug!("Searching DuckDuckGo via web_search (direct): {}", query);
+        debug!("web_search needs to call citescrape tool for query: {}", query);
 
-        // Call web_search directly (same package, no MCP needed)
-        let search_results = crate::web_search::search_with_manager(&self.browser_manager, query)
-            .await
-            .map_err(|e| UtilsError::BrowserError(e.to_string()))?;
-
-        // Extract URLs from SearchResults
-        let urls: Vec<String> = search_results.results.iter()
-            .map(|r| r.url.clone())
-            .collect();
-
-        if urls.is_empty() {
-            warn!("web_search returned no results for query: {}", query);
-        } else {
-            info!("web_search found {} URLs for query: {}", urls.len(), query);
-        }
-
-        Ok(urls)
+        // TODO: Call citescrape web_search tool via MCP client
+        // For now, return error indicating migration needed
+        Err(UtilsError::BrowserError(format!(
+            "web_search functionality moved to kodegen-tools-citescrape package. \
+             Deep research needs to be updated to call citescrape web_search tool. \
+             Query was: {}",
+            query
+        )))
     }
 
     /// Process a URL and extract content
